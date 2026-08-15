@@ -43,6 +43,15 @@ class Document(BaseModel):
     # project must not make the corpus unreproducible.
     sources: tuple[str, ...] = ()
 
+    # Try this document's own sources before the manifest-wide mirrors.
+    #
+    # Needed because "the mirror returned a PDF" is not the same as "the mirror
+    # returned a usable PDF". For some acts the mirror serves a scan: a valid
+    # PDF that the downloader accepts and the parser then rightly refuses. The
+    # flag records that finding in the manifest, so the knowledge survives in
+    # the corpus description instead of living in someone's memory.
+    prefer_sources: bool = False
+
     # Set when the only available copy is a scan and needs OCR.
     scanned: bool = False
 
@@ -144,8 +153,8 @@ class CorpusManifest(BaseModel):
         corpus costs one wasted request rather than a special case.
         """
         doc = self.get(document) if isinstance(document, str) else document
-        candidates = [template.format(id=doc.id) for template in self.mirror_templates]
-        candidates.extend(doc.sources)
+        mirrors = [template.format(id=doc.id) for template in self.mirror_templates]
+        candidates = [*doc.sources, *mirrors] if doc.prefer_sources else [*mirrors, *doc.sources]
         if not candidates:
             candidates.append(self.url_template.format(id=doc.id))
         return tuple(candidates)

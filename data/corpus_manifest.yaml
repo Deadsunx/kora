@@ -71,16 +71,26 @@ documents:
     domain: recouvrement et exécution
     status: in_force
     supersedes: AUPSRVE-1998
+    prefer_sources: true
     sources:
+      # SenegalLII (AfricanLII / Laws.Africa), CC-BY-4.0. Typeset by Laws.Africa
+      # from structured Akoma Ntoso rather than scanned, so unlike the mirror
+      # copy it carries a real text layer. Listed first via prefer_sources
+      # because the mirror serves a scan here: a valid PDF the downloader
+      # accepts and the parser then correctly refuses.
+      - https://senlii.org/akn/aa-ohada/act/2023/organisation-des-proc%C3%A9dures-simplifi%C3%A9es-de-recouvrement-et-des-voies-d-ex%C3%A9cution/fra@2024-07-02/source.pdf
+      # OHADA Journal Officiel special issue of 15 November 2023.
+      - https://www.ohada.com/uploads/actualite/7010/J.O._special_AUVE_15.11.2023.pdf
+      # Version unverified: this URL carries no year and both the 1998 and 2023
+      # texts exist. Kept last for that reason.
       - https://justice.sec.gouv.sn/wp-content/uploads/textes-reglements/OHADA/Acte-uniforme-portant-organisation-des-procedures-simplifiees-de-recouvrement-et-des-voies-dexecution-.pdf
     notes: >-
-      VERSION UNVERIFIED. This URL carries no year, and both the 1998 and 2023
-      texts exist. The adoption date must be confirmed inside the PDF before
-      this document is trusted as the in-force version -- mislabelling it would
-      put a repealed text into the in_force filter, which is precisely the error
-      this manifest exists to prevent. This is also the act the reference
-      dataset extracted at 242 of ~335 articles, so it is the headline
-      comparison for the parser.
+      The most-litigated act in OHADA law, and the headline comparison for the
+      parser: the reference dataset extracts 242 articles against roughly 335
+      official, having lost article boundaries to a two-column layout. Its
+      adoption date must be confirmed inside whichever PDF is used, since
+      mislabelling the 1998 text as in force is exactly the error the status
+      field exists to prevent.
 
   - id: SYCEBNL-2022
     abbrev: SYCEBNL

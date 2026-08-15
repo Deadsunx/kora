@@ -102,6 +102,22 @@ class ParsedDocument(BaseModel):
         return len(self.articles)
 
     @property
+    def longest_article_chars(self) -> int:
+        """Length of the longest article.
+
+        The third self-check, added after the first two both passed on a
+        corrupted parse. When a table of contents claimed every article number,
+        the real provisions were appended to whichever article was open, giving
+        a handful of 20,000-30,000 character blocks. Numbering stayed
+        contiguous and coverage stayed at 98.7%; only the length distribution
+        showed it.
+
+        Real articles in this corpus run to a few thousand characters at most,
+        so anything far beyond that means text has been merged.
+        """
+        return max((len(a.text) for a in self.articles), default=0)
+
+    @property
     def text_coverage(self) -> float:
         """Fraction of the source text that ended up inside an article.
 

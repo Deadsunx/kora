@@ -145,6 +145,74 @@ def test_inserted_articles_sort_between_their_neighbours() -> None:
     assert [a.number for a in parsed.articles] == ["99", "100", "133", "133-1", "133-2", "134"]
 
 
+# -- "Article premier" ------------------------------------------------------
+#
+# French legal drafting numbers the first article in words. AUPSRVE-2023 extends
+# the convention to inserted articles ("Article premier-11") while referring to
+# the same provisions numerically in the body ("l'article 1-10"). A digits-only
+# pattern does not merely miss article 1 -- every premier-N heading goes
+# unrecognised and its text is absorbed into the preceding article.
+
+
+@pytest.mark.parametrize("written", ["premier", "Premier", "1er", "1 er"])
+def test_first_article_written_in_words(written: str) -> None:
+    articles = articles_from_lines(
+        as_lines(
+            f"""
+            Article {written}
+            Le present Acte uniforme s'applique aux procedures.
+            Article 2
+            Corps du deuxieme article.
+            """
+        ),
+        DOC,
+    )
+    assert [a.number for a in articles] == ["1", "2"]
+    assert articles[0].text.startswith("Le present Acte")
+
+
+def test_inserted_articles_under_article_premier() -> None:
+    articles = articles_from_lines(
+        as_lines(
+            """
+            Article premier
+            Corps de l'article premier.
+            Article premier-10
+            Corps de l'article insere dix.
+            Article premier-11
+            Corps de l'article insere onze.
+            Article 2
+            Corps du deuxieme.
+            """
+        ),
+        DOC,
+    )
+    assert [a.number for a in articles] == ["1", "1-10", "1-11", "2"]
+    assert articles[2].text == "Corps de l'article insere onze."
+
+
+def test_premier_normalises_to_the_same_key_as_a_numeric_reference() -> None:
+    """`premier-11` and `1-11` must denote one article, not two."""
+    articles = articles_from_lines(
+        as_lines(
+            """
+            Article premier-11
+            Corps unique.
+            Article 1-11
+            Ceci est une reference, pas une seconde copie.
+            """
+        ),
+        DOC,
+    )
+    assert [a.number for a in articles] == ["1-11"]
+    assert "reference" in articles[0].text
+
+
+def test_article_premier_missing_shows_as_a_numbering_gap() -> None:
+    """The check that surfaced this convention in the first place."""
+    assert make_parsed(["2", "3", "4"]).numbering_gaps() == [1]
+
+
 # -- duplicate headings -----------------------------------------------------
 
 
@@ -163,6 +231,89 @@ def test_repeated_number_is_treated_as_body_text() -> None:
     )
     assert len(articles) == 1
     assert "reference" in articles[0].text
+
+
+# -- table of contents ------------------------------------------------------
+#
+# The subtlest failure found so far, and the one that defeated both quality
+# checks at once. A contents page repeats every article heading followed by dot
+# leaders. Naively parsed, each entry becomes a phantom article that claims its
+# number, so the genuine article later in the document is dismissed as a
+# duplicate and its text appended to whatever article is open. Numbering stays
+# contiguous (the phantoms cover every number) and coverage stays high (the text
+# is still there, just misfiled), so only the length distribution reveals it.
+
+
+def test_toc_entries_do_not_become_articles() -> None:
+    articles = articles_from_lines(
+        as_lines(
+            """
+            SOMMAIRE
+            Article 1
+            ..................................................... 3
+            Article 2
+            ..................................................... 7
+            Article 1
+            Le present Acte uniforme s'applique au recouvrement.
+            Article 2
+            Les procedures sont engagees devant la juridiction competente.
+            """
+        ),
+        DOC,
+    )
+    assert [a.number for a in articles] == ["1", "2"]
+    assert articles[0].text.startswith("Le present Acte")
+    assert articles[1].text.startswith("Les procedures")
+    assert "....." not in articles[0].text
+
+
+def test_toc_does_not_swallow_real_text_into_one_article() -> None:
+    """The signature of the bug: one enormous article holding everything."""
+    toc = "\n".join(f"Article {n}\n{'.' * 60} {n}" for n in range(1, 6))
+    body = "\n".join(f"Article {n}\nCorps de l'article numero {n}." for n in range(1, 6))
+    articles = articles_from_lines(as_lines(toc + "\n" + body), DOC)
+
+    assert len(articles) == 5
+    lengths = [len(a.text) for a in articles]
+    assert max(lengths) < 60, f"one article absorbed the rest: {lengths}"
+    for index, article in enumerate(articles, start=1):
+        assert article.text == f"Corps de l'article numero {index}."
+
+
+def test_dot_leader_lines_are_dropped_anywhere() -> None:
+    articles = articles_from_lines(
+        as_lines(
+            """
+            Article 7
+            Premiere phrase du corps.
+            ............................ 12
+            Deuxieme phrase du corps.
+            """
+        ),
+        DOC,
+    )
+    assert "...." not in articles[0].text
+    assert "Premiere phrase" in articles[0].text
+    assert "Deuxieme phrase" in articles[0].text
+
+
+def test_ordinary_ellipsis_is_not_treated_as_a_dot_leader() -> None:
+    """Three dots are punctuation; four or more are a contents leader."""
+    articles = articles_from_lines(
+        as_lines(
+            """
+            Article 8
+            La juridiction statue... sans delai.
+            """
+        ),
+        DOC,
+    )
+    assert "sans delai" in articles[0].text
+
+
+def test_longest_article_flags_merged_text() -> None:
+    normal = make_parsed(["1", "2"])
+    assert normal.longest_article_chars == len("corps")
 
 
 # -- hierarchy --------------------------------------------------------------
