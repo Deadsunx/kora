@@ -1,0 +1,18 @@
+# Ablation: add cross-encoder reranking on top of hybrid retrieval.
+#
+# This is the expensive stage -- a cross-encoder scores every (query, passage)
+# pair jointly instead of comparing precomputed vectors. Expect a real accuracy
+# gain and a real latency cost. Reporting both is the entire point.
+
+extends: ../base.yaml
+
+name: hybrid-rerank
+description: Dense + BM25 + cross-encoder reranking over a wider candidate pool.
+
+retrieval:
+  bm25: true
+  top_k: 50      # rerankers only help if given enough candidates to re-order
+  final_k: 5
+
+reranker:
+  enabled: true

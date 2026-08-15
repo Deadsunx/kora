@@ -1,0 +1,117 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "kora"
+version = "0.1.0"
+description = "Retrieval-augmented question answering over French-language African business law (OHADA)."
+readme = "README.md"
+requires-python = ">=3.13,<3.14"
+license = { text = "MIT" }
+
+# Core dependencies only. Heavy, optional stacks live in [project.optional-dependencies]
+# so that `pip install -e .` stays fast and CI does not need a GPU.
+dependencies = [
+    "pydantic>=2.7",
+    "pydantic-settings>=2.3",
+    "pyyaml>=6.0",
+    "typer>=0.12",
+    "rich>=13.7",
+    "structlog>=24.1",
+    "httpx>=0.27",
+    "tenacity>=8.3",
+]
+
+[project.optional-dependencies]
+ingest = [
+    "pymupdf>=1.24",
+    "beautifulsoup4>=4.12",
+    "lxml>=5.2",
+]
+retrieval = [
+    "sentence-transformers>=3.0",
+    "faiss-cpu>=1.8",
+    "rank-bm25>=0.2.2",
+]
+eval = [
+    "pandas>=2.2",
+    "numpy>=1.26",
+    "scipy>=1.13",
+    "matplotlib>=3.9",
+    "tabulate>=0.9",
+]
+train = [
+    "transformers>=4.44",
+    "peft>=0.12",
+    "trl>=0.9",
+    "datasets>=2.20",
+    "accelerate>=0.33",
+    "bitsandbytes>=0.43",
+]
+serve = [
+    "fastapi>=0.111",
+    "uvicorn[standard]>=0.30",
+    "sse-starlette>=2.1",
+]
+dev = [
+    "pytest>=8.2",
+    "pytest-cov>=5.0",
+    "ruff>=0.5",
+    "mypy>=1.10",
+    "types-PyYAML>=6.0",
+]
+
+[project.scripts]
+kora = "kora.cli:app"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.setuptools.package-data]
+kora = ["py.typed"]
+
+# ---------------------------------------------------------------------------
+# Tooling
+# ---------------------------------------------------------------------------
+
+[tool.ruff]
+line-length = 100
+target-version = "py313"
+src = ["src", "tests"]
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "N", "UP", "B", "SIM", "RUF"]
+ignore = ["E501"]  # line length is handled by the formatter
+
+[tool.ruff.lint.per-file-ignores]
+# Typer declares CLI options as function-call defaults. B008 exists to catch
+# accidental mutable/shared defaults, which is not what is happening here --
+# this is the framework's documented idiom, so the rule is off for the CLI only.
+"src/kora/cli.py" = ["B008"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-q --strict-markers"
+markers = [
+    "slow: tests that download models or hit the network",
+    "gpu: tests that require CUDA",
+]
+
+[tool.mypy]
+python_version = "3.13"
+# Resolve the package from the source tree rather than from site-packages, so
+# type checking works identically in CI, in the editable install, and in a
+# fresh checkout with nothing installed.
+mypy_path = "src"
+packages = ["kora"]
+# Without this, mypy does not understand that `Field(512, gt=0)` supplies a
+# default, and reports every optional field as a missing required argument.
+plugins = ["pydantic.mypy"]
+
+[tool.pydantic-mypy]
+init_forbid_extra = true
+init_typed = true
+warn_required_dynamic_aliases = true
+ignore_missing_imports = true
+warn_unused_ignores = true

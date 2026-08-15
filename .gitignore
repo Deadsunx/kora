@@ -1,0 +1,50 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.Python
+build/
+dist/
+
+# Environments
+.venv/
+venv/
+.env
+
+# Editors
+.vscode/
+.idea/
+*.swp
+
+# Jupyter
+.ipynb_checkpoints/
+
+# Testing / tooling caches
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+htmlcov/
+.coverage
+
+# --- Project-specific ---
+
+# Raw and derived data are reproducible from scripts; never commit them.
+data/raw/
+data/interim/
+data/processed/
+data/indexes/
+
+# Model weights and adapters
+models/
+*.safetensors
+*.gguf
+*.bin
+
+# Experiment outputs: keep the summary tables, drop the bulky per-run artifacts.
+runs/**/predictions.jsonl
+runs/**/*.log
+!runs/**/metrics.json
+!runs/**/config.resolved.yaml
+
+# Hugging Face cache if pointed inside the repo
+.cache/

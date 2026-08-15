@@ -1,0 +1,14 @@
+# Ablation: add lexical BM25 retrieval alongside dense, fused with RRF.
+#
+# Hypothesis worth stating before running it: legal French is full of exact
+# tokens that dense encoders blur -- article numbers, "société anonyme",
+# "acte uniforme". BM25 should help precisely where embeddings are weakest.
+# Write the hypothesis down first; it keeps you honest when the result disagrees.
+
+extends: ../base.yaml
+
+name: hybrid-rrf
+description: Dense + BM25 fused with reciprocal rank fusion.
+
+retrieval:
+  bm25: true

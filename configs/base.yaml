@@ -1,0 +1,50 @@
+# Baseline system: dense retrieval only, no reranking, no fine-tuning.
+#
+# This is the reference point every later number is compared against. Resist the
+# urge to "improve" it once experiments start -- if the baseline moves, the whole
+# ablation table becomes meaningless.
+
+name: baseline-dense
+description: >
+  Structure-aware chunking, multilingual dense retrieval, base instruct model.
+  No BM25, no reranker, no adapter. The number everything else must beat.
+
+chunking:
+  strategy: structural
+  max_tokens: 512
+  overlap_tokens: 64
+  min_tokens: 32
+
+embedding:
+  model_name: intfloat/multilingual-e5-base
+  device: auto
+  batch_size: 32
+  normalize: true
+  query_prefix: "query: "
+  passage_prefix: "passage: "
+
+retrieval:
+  dense: true
+  bm25: false
+  rrf_k: 60
+  top_k: 20
+  final_k: 5
+
+reranker:
+  enabled: false
+  model_name: BAAI/bge-reranker-v2-m3
+  batch_size: 16
+
+generator:
+  model_name: Qwen/Qwen3-4B-Instruct
+  adapter_path: null
+  quantization: 4bit
+  max_new_tokens: 512
+  temperature: 0.0
+  allow_abstention: true
+
+eval:
+  dataset_path: data/eval/gold_qa.jsonl
+  recall_at_k: [1, 3, 5, 10, 20]
+  judge_model: null
+  seed: 42

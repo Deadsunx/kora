@@ -1,0 +1,13 @@
+# Ablation: does structure-aware chunking actually beat naive fixed-size splitting?
+#
+# Deliberately a *downgrade* from the baseline. Half of a credible ablation table
+# is showing what happens when you remove the clever thing -- if fixed chunking
+# scores the same, the structural chunker is complexity you cannot justify.
+
+extends: ../base.yaml
+
+name: fixed-chunking
+description: Naive fixed-size chunking with overlap, everything else unchanged.
+
+chunking:
+  strategy: fixed
