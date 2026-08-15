@@ -311,6 +311,49 @@ def test_ordinary_ellipsis_is_not_treated_as_a_dot_leader() -> None:
     assert "sans delai" in articles[0].text
 
 
+@pytest.mark.parametrize(
+    "marker",
+    ["page 3 / 217", "Page 12 sur 40", "- 14 -", "217", "— 7 —"],
+)
+def test_page_numbering_is_dropped(marker: str) -> None:
+    """Found by spot-checking bodies: one article began 'page 3 / 217'.
+
+    Frequency-based furniture detection cannot catch these -- the text differs
+    on every page, so nothing repeats often enough to be recognised.
+    """
+    articles = articles_from_lines(
+        as_lines(
+            f"""
+            Article 9
+            Des epoux ne peuvent etre associes d'une societe.
+            {marker}
+            Suite du corps.
+            """
+        ),
+        DOC,
+    )
+    assert marker not in articles[0].text
+    assert "Des epoux" in articles[0].text
+    assert "Suite du corps" in articles[0].text
+
+
+def test_numbered_list_items_with_text_survive() -> None:
+    """Only a bare numeral is a page marker; an enumeration item is content."""
+    articles = articles_from_lines(
+        as_lines(
+            """
+            Article 10
+            Les mentions suivantes sont exigees :
+            1. la denomination sociale ;
+            2. la forme de la societe.
+            """
+        ),
+        DOC,
+    )
+    assert "denomination sociale" in articles[0].text
+    assert "forme de la societe" in articles[0].text
+
+
 def test_longest_article_flags_merged_text() -> None:
     normal = make_parsed(["1", "2"])
     assert normal.longest_article_chars == len("corps")

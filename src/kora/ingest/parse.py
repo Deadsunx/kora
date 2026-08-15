@@ -113,6 +113,15 @@ MAX_RUBRIC_CHARS = 160
 # structurally a TOC artefact regardless of what else is on it.
 DOT_LEADER_RE = re.compile(r"\.{4,}")
 
+# Page numbering ("page 3 / 217", "- 14 -", a bare numeral on its own line).
+# Frequency-based furniture detection cannot catch these: the text differs on
+# every page, so no line repeats often enough to be recognised. Found by
+# spot-checking article bodies, where one had swallowed its page marker.
+PAGE_NUMBER_RE = re.compile(
+    rf"^(?:page\s+\d+\s*(?:/|sur|of)\s*\d+|[{_DASHES}]?\s*\d{{1,4}}\s*[{_DASHES}]?)$",
+    re.IGNORECASE,
+)
+
 
 def _detect_furniture(pages: list[str], *, threshold: float = 0.5) -> set[str]:
     """Find header/footer lines that repeat across most pages.
@@ -173,8 +182,12 @@ def _is_rubric(line: str) -> bool:
     return not ARTICLE_RE.match(line)
 
 
-def strip_dot_leaders(lines: list[tuple[str, int]]) -> list[tuple[str, int]]:
-    """Remove table-of-contents leader lines.
+def strip_page_artifacts(lines: list[tuple[str, int]]) -> list[tuple[str, int]]:
+    """Remove contents-page leader lines and page numbering.
+
+    Neither is reachable by frequency-based furniture detection: dot leaders
+    appear only in the contents section, and page numbers differ on every page,
+    so no line repeats often enough to be recognised as furniture.
 
     Applied by `articles_from_lines`, so it is exercised by every segmentation
     test, and again by `parse_pdf` before it measures the source size. That
@@ -183,7 +196,11 @@ def strip_dot_leaders(lines: list[tuple[str, int]]) -> list[tuple[str, int]]:
     collapse where nothing was actually lost. The function is idempotent, so
     calling it twice costs nothing.
     """
-    return [(line, page) for line, page in lines if not DOT_LEADER_RE.search(line)]
+    return [
+        (line, page)
+        for line, page in lines
+        if not DOT_LEADER_RE.search(line) and not PAGE_NUMBER_RE.match(line)
+    ]
 
 
 class ParseError(RuntimeError):
@@ -200,7 +217,7 @@ def articles_from_lines(
     complexity lives -- can be tested against synthetic text, with no PDF and no
     corpus present. CI has neither.
     """
-    lines = strip_dot_leaders(lines)
+    lines = strip_page_artifacts(lines)
 
     articles: list[Article] = []
     hierarchy: dict[str, str] = {}
@@ -326,7 +343,7 @@ def parse_pdf(path: Path, document: Document) -> ParsedDocument:
 
     # Filter before measuring, so contents pages are excluded from both sides
     # of the coverage ratio rather than only from the numerator.
-    lines = strip_dot_leaders(lines)
+    lines = strip_page_artifacts(lines)
     articles = articles_from_lines(lines, document)
     if not articles:
         raise ParseError(f"{document.id}: no articles found")

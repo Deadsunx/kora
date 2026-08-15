@@ -19,9 +19,12 @@ authoritative, and where they disagree the disagreement is the finding.
 | AUDCIF-2017 | 40 | 123 | 0 | 98.6% | 120 | +3 |
 | AUPCAP-2015 | 122 | 377 | 0 | 99.3% | 371 | +6 |
 | AUM-2017 | 9 | 18 | 0 | 95.5% | *absent* | — |
-| **AUPSRVE-2023** | 113 | **448** | 0 | 98.4% | 242 | **+206** |
-| AUSCGIE-2014 | 217 | 1089 | 0 | 98.6% | 1392 | **−303** |
+| **AUPSRVE-2023** | 113 | **448** | 0 | 98.3% | 242 | **+206** |
+| **AUSCGIE-2014** | 217 | **1089** | 0 | 98.5% | 811 † | **+278** |
 | SYCEBNL-2022 | 438 | — | — | — | *absent* | scan |
+
+† The reference's AUSCGIE table has 1,392 **rows** but only **811 distinct**
+article numbers — 549 labels appear more than once. See below.
 
 **Zero numbering gaps across every parsed document.** Coverage 95.5–99.3%.
 
@@ -112,14 +115,56 @@ blocks are legitimately not article text. Contents pages are excluded from both
 sides of the ratio, since counting them only in the denominator reports a
 collapse where nothing was lost.
 
+## Resolved: the AUSCGIE-2014 disagreement
+
+Previously recorded as an unexplained −303. Settled by comparing article
+identifiers rather than counts, against `nodes/articles.csv` in the reference
+repository.
+
+| | Reference | Ours |
+|---|---:|---:|
+| Rows | 1,392 | 1,089 |
+| **Distinct article numbers** | **811** | **1,089** |
+| Duplicated labels | **549** | 0 |
+| Articles absent from the other set | **0** | **278** |
+
+The reference's headline figure of 1,392 counts rows, and 549 article numbers
+appear more than once in its table. Its distinct article count is 811.
+
+Our extraction is a **strict superset**: every article the reference holds is
+present in ours, and 278 more besides. Spot-checking three of the 278 confirms
+they are genuine provisions of the act — article 4 (*"La société commerciale est
+créée par deux (2) ou plusieurs personnes…"*), article 8 (capacity of minors),
+article 9 (spouses as co-associates).
+
+The −303 was an artefact of comparing our distinct-article count against their
+row count. Stated plainly because the earlier version of this document
+speculated about "different counting units" and that speculation was wrong: the
+difference is duplication on their side and coverage on ours, not a difference
+in what counts as an article.
+
+**A defect of ours found by the same check.** Spot-checking article bodies showed
+one beginning `"page 3 / 217"`. Page numbers differ on every page, so
+frequency-based furniture detection cannot see them; they are now removed by
+pattern. This is the fourth defect found by a mechanism other than the one it
+was looking for, which is the argument for checking output by inspection as well
+as by metric.
+
+**A note on the reference's usability.** It cannot be loaded through the
+HuggingFace datasets API at all: its CSVs carry mismatched schemas within one
+config (`article_id`/`acte_id` in some files, `source_acte`/`target_acte` in
+others), so the loader fails with `DatasetGenerationCastError`. The raw CSVs
+must be read directly.
+
+None of this diminishes the reference's value here. It caught nothing of ours
+that was wrong, but the five exact agreements it produced are what made the two
+disagreements interpretable at all.
+
 ## Open items
 
-1. **AUSCGIE-2014 −303.** Our count is corroborated across two different source
-   PDFs (Congo government, 209 pages; mirror, 217 pages), both yielding 1089
-   with zero gaps. Still unexplained, and still not claimed as a win: a
-   difference in counting unit would explain it without either extraction being
-   faulty. Settle by comparing article *lists*, not counts.
-2. SYCEBNL-2022 needs a text source or OCR. If OCR, it must be tracked as a
+1. SYCEBNL-2022 needs a text source or OCR. If OCR, it must be tracked as a
    distinct quality tier — OCR error rates on legal French would otherwise
    confound every later measurement.
-3. The 7 repealed acts remain unsourced; the mirror 403s on all of them.
+2. The 7 repealed acts remain unsourced; the mirror 403s on all of them.
+3. Re-run the article-list comparison for AUPCAP (+6) and AUDCIF (+3) to confirm
+   those are the same superset relationship rather than a different phenomenon.
