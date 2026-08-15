@@ -196,8 +196,12 @@ def download_corpus(
     with httpx.Client(timeout=timeout, headers=headers, follow_redirects=True) as client:
         for document in targets:
             # Documents awaiting source discovery are a known state, not an
-            # error. Only chase them when asked for by name.
-            if skip_unsourced and not document.sources and not only:
+            # error. Only chase them when asked for by name. A mirror template
+            # covers every id, so once one is configured nothing is skipped --
+            # documents the mirror lacks simply 404 and land in `failures` with
+            # a real reason rather than a guess.
+            has_candidate = bool(document.sources or manifest.mirror_templates)
+            if skip_unsourced and not has_candidate and not only:
                 failures.append((document, "no source URL recorded yet"))
                 continue
             try:

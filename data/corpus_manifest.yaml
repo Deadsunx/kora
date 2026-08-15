@@ -45,6 +45,19 @@ source_index: https://www.ohada.com/textes-ohada/actes-uniformes.html
 url_template: https://www.ohada.com/telechargement/actes-uniformes/{id}_fr.pdf
 language: fr
 
+# Mirrors the ohada.com download set under the same {id}_fr.pdf naming, without
+# the sign-in wall. Verified to serve all 11 in-force acts; it does not carry
+# the 7 repealed ones, which simply 404 and fall through to the per-document
+# sources below.
+#
+# Preferred over the government portals so the corpus is single-sourced: one
+# host means one PDF toolchain and one set of layout quirks, which keeps parser
+# behaviour comparable across acts instead of varying per document. The portals
+# remain listed as fallbacks -- reproducibility should not depend on one site
+# staying up.
+mirror_templates:
+  - https://jurisprudence-ohada.com/wp-content/uploads/2024/08/{id}_fr.pdf
+
 documents:
   # -- Currently in force ---------------------------------------------------
 

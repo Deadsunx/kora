@@ -77,6 +77,12 @@ class CorpusManifest(BaseModel):
     language: str
     documents: tuple[Document, ...]
 
+    # Hosts that mirror the whole download set under a uniform naming scheme.
+    # Expressed as templates rather than 18 hand-written URLs because that is
+    # what they actually are -- and because a template that stops working fails
+    # visibly for every document at once, instead of rotting one entry at a time.
+    mirror_templates: tuple[str, ...] = ()
+
     @model_validator(mode="after")
     def _check_integrity(self) -> CorpusManifest:
         ids = [doc.id for doc in self.documents]
@@ -126,12 +132,23 @@ class CorpusManifest(BaseModel):
         return tuple(d for d in self.documents if d.status == "superseded")
 
     def urls_for(self, document: Document | str) -> tuple[str, ...]:
-        """Candidate download URLs for a document, in preference order."""
+        """Candidate download URLs for a document, in preference order.
+
+        Mirrors come first so the corpus is single-sourced wherever possible:
+        one host, one PDF toolchain, one set of layout quirks for the parser to
+        handle. Per-document government-portal URLs follow as fallbacks, which
+        is what keeps the corpus reproducible if the mirror disappears.
+
+        A mirror that lacks a given document simply 404s and the downloader
+        falls through, so listing a template that covers only part of the
+        corpus costs one wasted request rather than a special case.
+        """
         doc = self.get(document) if isinstance(document, str) else document
-        if doc.sources:
-            return doc.sources
-        # Fall back to the template for documents whose source is not yet known.
-        return (self.url_template.format(id=doc.id),)
+        candidates = [template.format(id=doc.id) for template in self.mirror_templates]
+        candidates.extend(doc.sources)
+        if not candidates:
+            candidates.append(self.url_template.format(id=doc.id))
+        return tuple(candidates)
 
     def url_for(self, document: Document | str) -> str:
         """The preferred download URL for a document."""

@@ -1,82 +1,92 @@
-# Extraction quality — first corpus-wide run
+# Extraction quality
 
-Date: 2026-08-16 · parser version 1.0 · 9 of 18 documents acquired
-
-## Results
+Date: 2026-08-16 · parser version 1.0 · 11 of 18 documents acquired · **2,608 articles**
 
 Reference counts are from [`Maathis-com/ohada-actes-uniformes`](https://huggingface.co/datasets/Maathis-com/ohada-actes-uniformes),
 an independently published corpus built from the same government sources. It is
-used here as an external check, not as ground truth — neither corpus is
+used as an external check, not as ground truth — neither corpus is
 authoritative, and where they disagree the disagreement is the finding.
 
-| Document | Pages | Articles | Gaps | Coverage | Reference | Δ | Verdict |
-|---|---:|---:|---:|---:|---:|---:|---|
-| AUSCOOP-2010 | 94 | 397 | 0 | 96.9% | 397 | **0** | agree exactly |
-| AUDCG-2010 | 78 | 307 | 0 | 96.2% | 307 | **0** | agree exactly |
-| AUCTMR-2003 | 18 | 31 | 0 | 96.1% | 31 | **0** | agree exactly |
-| AUSCGIE-2014 | 209 | 1089 | 0 | 98.6% | 1392 | −303 | **unexplained** |
-| AUPCAP-2015 | 132 | 370 | **6** | 96.0% | 371 | −1 | our defect |
-| AUPSRVE-2023 | 40 | — | — | — | 242 | — | scan, 0 chars |
-| AUA-2017 | 14 | — | — | — | 38 | — | scan |
-| AUM-2017 | 14 | — | — | — | — | — | scan (same file as AUA) |
-| AUDCIF-2017 | 54 | — | — | — | 120 | — | scan |
+## Results
+
+| Document | Pages | Articles | Gaps | Coverage | Reference | Δ |
+|---|---:|---:|---:|---:|---:|---:|
+| AUSCOOP-2010 | 79 | 397 | 0 | 98.0% | 397 | **0** |
+| AUDCG-2010 | 67 | 307 | 0 | 98.5% | 307 | **0** |
+| AUS-2010 | 45 | 228 | 0 | 98.1% | 228 | **0** |
+| AUA-2017 | 13 | 38 | 0 | 96.5% | 38 | **0** |
+| AUCTMR-2003 | 14 | 31 | 0 | 98.3% | 31 | **0** |
+| AUPCAP-2015 | 122 | 377 | 0 | 99.3% | 371 | **+6** |
+| AUDCIF-2017 | 40 | 123 | 0 | 98.6% | 120 | **+3** |
+| AUM-2017 | 9 | 18 | 0 | 95.5% | *absent* | — |
+| AUSCGIE-2014 | 217 | 1089 | 0 | 98.6% | 1392 | **−303** |
+| AUPSRVE-2023 | 122 | — | — | — | 242 | scan |
+| SYCEBNL-2022 | 438 | — | — | — | *absent* | scan |
+
+**Zero numbering gaps across every parsed document.** Coverage 95.5–99.3%.
 
 ## Reading the table
 
-**Three exact agreements.** AUSCOOP, AUDCG and AUCTMR match the reference count
-to the article, on documents of very different sizes (397, 307, 31). Two
-independent parsers, written from different sources, converging exactly is the
-strongest evidence available that both are extracting correctly. This is what
-licenses any claim made about the two disagreements below.
+**Five exact agreements** (397, 307, 228, 38, 31). Two parsers written
+independently from different sources, converging to the article on documents
+spanning an order of magnitude in size, is the strongest evidence available that
+both extract correctly. Everything below is licensed by that.
 
-**AUPCAP-2015 — six articles we lose.** Numbers 64, 152, 163, 214, 243, 246 are
-missing. The reference has 371 against our 370, so we are one short overall
-while missing six numbers — meaning we also pick up inserted articles they do
-not. This is our defect and it is precisely localised: six known headings to
-inspect in a 132-page document. Fixable, and the numbering check is what made it
-visible at all.
+**AUPCAP-2015: +6, and our own defect fixed.** The earlier Senegal PDF gave 370
+articles with 6 numbering gaps. The mirror's text-layer PDF gives 377 with none,
+now 6 *above* the reference. The 6 articles we previously lost were a source
+problem, not a parser problem — and the numbering invariant is what
+distinguished the two rather than leaving it a guess.
 
-**AUSCGIE-2014 — 303 articles apart, and we have no gaps.** Our extraction is
-internally consistent: base numbering 1..920 with zero gaps, 169 inserted
-articles, terminal article 920 repealing the 1997 act, 98.6% text coverage.
-303 additional provisions cannot hide inside 1.4% of uncaptured characters —
-that residue is the cover page, structural headings and the signature block.
+**AUM-2017 is absent from the reference entirely**, confirming that it covers 9
+of the 11 in-force acts. SYCEBNL-2022 is likewise absent.
 
-Given three exact agreements elsewhere, the likeliest explanation is a
-difference in counting unit rather than a difference in extraction: the
-reference may split alinéas, or count sub-provisions as separate articles.
-**This is a hypothesis, not a conclusion.** Resolving it means comparing article
-lists directly rather than counts, which is a Phase 2 task.
+**AUSCGIE-2014: −303, and now corroborated.** This act was parsed twice from two
+different PDFs — the Congo government copy (637 KB, 209 pages) and the mirror
+copy (771 KB, 217 pages) — and both yield **exactly 1089 articles with zero
+gaps**. Two different source files, two different page counts, the same article
+list.
 
-## Scanned documents
+That materially strengthens the case that 1089 is correct for this text, since a
+parser bug would have to produce the identical wrong answer on two differently
+laid-out PDFs. It does not *prove* the reference wrong: a difference in counting
+unit (splitting alinéas, counting sub-provisions) would explain the gap without
+either extraction being faulty. Settling it requires comparing article *lists*,
+not counts — a Phase 2 task.
 
-Four documents have no usable text layer, and the parser refused them rather
-than emitting fragments:
+## Remaining scans
 
-- **AUPSRVE-2023** — 40 pages, **0 characters**. Also implausibly short: ~335
-  articles do not fit in 40 pages, so this file is likely partial as well as
-  scanned. Its version was already flagged unverified.
-- **AUA-2017 / AUM-2017** — 14 pages, 1,496 characters, and identical
-  checksums, confirming the manifest's warning that one PDF carries both acts.
-- **AUDCIF-2017** — 54 pages, 4,564 characters.
+Two documents still have no usable text layer:
 
-The guard here matters more than it looks. A parser without a text-layer check
-does not fail on a scan; it succeeds, returning three articles of OCR noise,
-and the corpus is quietly poisoned. Refusing is the correct behaviour.
+- **AUPSRVE-2023** — 122 pages, 10,140 characters (83 per page). Also emits a
+  MuPDF font error, suggesting embedded subset fonts without a usable encoding.
+- **SYCEBNL-2022** — 438 pages, 66,126 characters (151 per page).
 
-Two routes forward, to be decided: locate text-layer sources on other
-government portals, or run OCR (Tesseract with `fra`) and treat OCR'd documents
-as a distinct quality tier — since OCR error rates on legal French will affect
-retrieval, and mixing tiers silently would confound every later measurement.
+Both are refused rather than parsed. A parser without a text-layer check does
+not fail on a scan; it succeeds, returns a handful of articles of OCR noise, and
+poisons the corpus silently.
+
+AUPSRVE-2023 matters most of the three open problems: it is the most-litigated
+act in OHADA law, and the one where the reference reports 242 articles against
+roughly 335 official. It is the headline comparison and it is not yet parsed.
 
 ## Method note
 
 Two independent checks, because each catches what the other cannot:
 
 - `numbering_gaps()` — legal texts number articles contiguously, so a gap means
-  a heading was swallowed. Caught the AUPCAP defect.
+  a heading was swallowed.
 - `text_coverage()` — a parser can produce a perfect contiguous 1..920 while
-  discarding half of every body. Catches what numbering cannot.
+  discarding half of every body.
 
-Coverage sits at 96–99% throughout. It should not reach 100%: cover pages,
-structural headings and signature blocks are legitimately not article text.
+Coverage should not reach 100%: cover pages, structural headings and signature
+blocks are legitimately not article text.
+
+## Open items
+
+1. AUPSRVE-2023 and SYCEBNL-2022 need a text source or OCR (Tesseract `fra`).
+   If OCR, they must be tracked as a distinct quality tier — OCR error rates on
+   legal French will affect retrieval, and mixing tiers silently would confound
+   every later measurement.
+2. AUSCGIE-2014 −303: compare article lists against the reference, not counts.
+3. The 7 repealed acts remain unsourced; the mirror 403s on all of them.
