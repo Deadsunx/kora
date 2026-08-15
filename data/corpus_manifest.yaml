@@ -1,0 +1,215 @@
+# OHADA Actes uniformes -- corpus manifest.
+#
+# This file is the single source of truth for what the corpus contains. It is
+# versioned in git even though `data/` is not, because the *description* of the
+# corpus is part of the method, while the bytes are reproducible from it.
+#
+# ---------------------------------------------------------------------------
+# On the `status` field
+# ---------------------------------------------------------------------------
+# OHADA publishes revised acts that repeal earlier ones, and the download index
+# lists both. A legal assistant that answers from a repealed act is worse than
+# one that answers nothing, so status is tracked explicitly and carried through
+# to every chunk.
+#
+#   in_force    -- current text, safe to cite
+#   superseded  -- repealed by a later act; retained deliberately
+#
+# Superseded acts are ingested on purpose, for two reasons:
+#   1. They are the ideal distractor set. A retriever that cannot tell the 1997
+#      AUSCGIE from the 2014 one will be caught by the evaluation instead of
+#      being caught by a user.
+#   2. Questions about the *history* of a provision are legitimate, and answering
+#      them requires the old text.
+#
+# NOTE: status here is derived from OHADA's own publication list (a revised act
+# of the same scope repeals its predecessor). It is a research-grade annotation,
+# not legal advice, and is asserted as such in the generated answers.
+
+version: 1
+source_index: https://www.ohada.com/textes-ohada/actes-uniformes.html
+url_template: https://www.ohada.com/telechargement/actes-uniformes/{id}_fr.pdf
+language: fr
+
+documents:
+  # -- Currently in force ---------------------------------------------------
+
+  - id: AUPSRVE-2023
+    abbrev: AUPSRVE
+    year: 2023
+    adopted: 2023-10-17
+    title: >-
+      Acte uniforme portant organisation des procédures simplifiées de
+      recouvrement et des voies d'exécution
+    domain: recouvrement et exécution
+    status: in_force
+    supersedes: AUPSRVE-1998
+
+  - id: SYCEBNL-2022
+    abbrev: SYCEBNL
+    year: 2022
+    adopted: 2022-12-22
+    title: >-
+      Acte uniforme relatif au Système comptable des entités à but non lucratif
+    domain: comptabilité des entités à but non lucratif
+    status: in_force
+
+  - id: AUA-2017
+    abbrev: AUA
+    year: 2017
+    adopted: 2017-11-23
+    title: Acte uniforme relatif au droit de l'arbitrage
+    domain: arbitrage
+    status: in_force
+    supersedes: AUA-1999
+
+  - id: AUM-2017
+    abbrev: AUM
+    year: 2017
+    adopted: 2017-11-23
+    title: Acte uniforme relatif à la médiation
+    domain: médiation
+    status: in_force
+
+  - id: AUDCIF-2017
+    abbrev: AUDCIF
+    year: 2017
+    adopted: 2017-01-26
+    title: >-
+      Acte uniforme relatif au droit comptable et à l'information financière
+    domain: droit comptable
+    status: in_force
+    supersedes: AUCE-2000
+
+  - id: AUPCAP-2015
+    abbrev: AUPCAP
+    year: 2015
+    adopted: 2015-09-10
+    title: >-
+      Acte uniforme portant organisation des procédures collectives
+      d'apurement du passif
+    domain: procédures collectives
+    status: in_force
+    supersedes: AUPCAP-1998
+
+  - id: AUSCGIE-2014
+    abbrev: AUSCGIE
+    year: 2014
+    adopted: 2014-01-30
+    title: >-
+      Acte uniforme révisé relatif au droit des sociétés commerciales et du
+      groupement d'intérêt économique
+    domain: sociétés commerciales
+    status: in_force
+    supersedes: AUSCGIE-1997
+    notes: >-
+      Largest act in the corpus and the most likely subject of user questions
+      (company formation, governance, capital). Expect it to dominate retrieval.
+
+  - id: AUS-2010
+    abbrev: AUS
+    year: 2010
+    adopted: 2010-12-15
+    title: Acte uniforme révisé portant organisation des sûretés
+    domain: sûretés
+    status: in_force
+    supersedes: AUS-1997
+
+  - id: AUSCOOP-2010
+    abbrev: AUSCOOP
+    year: 2010
+    adopted: 2010-12-15
+    title: Acte uniforme relatif au droit des sociétés coopératives
+    domain: sociétés coopératives
+    status: in_force
+
+  - id: AUDCG-2010
+    abbrev: AUDCG
+    year: 2010
+    adopted: 2010-12-15
+    title: Acte uniforme révisé portant sur le droit commercial général
+    domain: droit commercial général
+    status: in_force
+    supersedes: AUDCG-1997
+
+  - id: AUCTMR-2003
+    abbrev: AUCTMR
+    year: 2003
+    adopted: 2003-03-22
+    title: >-
+      Acte uniforme relatif aux contrats de transport de marchandises par route
+    domain: transport routier de marchandises
+    status: in_force
+
+  # -- Superseded: kept as distractors and for historical questions ----------
+
+  - id: AUCE-2000
+    abbrev: AUCE
+    year: 2000
+    adopted: 2000-03-24
+    title: >-
+      Acte uniforme portant organisation et harmonisation des comptabilités
+      des entreprises
+    domain: droit comptable
+    status: superseded
+    superseded_by: AUDCIF-2017
+
+  - id: AUA-1999
+    abbrev: AUA
+    year: 1999
+    adopted: 1999-03-11
+    title: Acte uniforme relatif au droit de l'arbitrage
+    domain: arbitrage
+    status: superseded
+    superseded_by: AUA-2017
+
+  - id: AUPSRVE-1998
+    abbrev: AUPSRVE
+    year: 1998
+    adopted: 1998-04-10
+    title: >-
+      Acte uniforme portant organisation des procédures simplifiées de
+      recouvrement et des voies d'exécution
+    domain: recouvrement et exécution
+    status: superseded
+    superseded_by: AUPSRVE-2023
+
+  - id: AUPCAP-1998
+    abbrev: AUPCAP
+    year: 1998
+    adopted: 1998-04-10
+    title: >-
+      Acte uniforme portant organisation des procédures collectives
+      d'apurement du passif
+    domain: procédures collectives
+    status: superseded
+    superseded_by: AUPCAP-2015
+
+  - id: AUDCG-1997
+    abbrev: AUDCG
+    year: 1997
+    adopted: 1997-04-17
+    title: Acte uniforme relatif au droit commercial général
+    domain: droit commercial général
+    status: superseded
+    superseded_by: AUDCG-2010
+
+  - id: AUSCGIE-1997
+    abbrev: AUSCGIE
+    year: 1997
+    adopted: 1997-04-17
+    title: >-
+      Acte uniforme relatif au droit des sociétés commerciales et du
+      groupement d'intérêt économique
+    domain: sociétés commerciales
+    status: superseded
+    superseded_by: AUSCGIE-2014
+
+  - id: AUS-1997
+    abbrev: AUS
+    year: 1997
+    adopted: 1997-04-17
+    title: Acte uniforme portant organisation des sûretés
+    domain: sûretés
+    status: superseded
+    superseded_by: AUS-2010

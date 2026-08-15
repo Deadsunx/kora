@@ -1,0 +1,17 @@
+# Normalise line endings. Development happens on Windows, CI runs on Linux;
+# without this, every file round-trips as a whole-file diff.
+* text=auto eol=lf
+
+# Windows-only scripts must keep CRLF to remain executable by cmd/PowerShell.
+*.ps1 text eol=crlf
+*.bat text eol=crlf
+*.cmd text eol=crlf
+
+# Binary assets: never touch.
+*.png binary
+*.jpg binary
+*.pdf binary
+*.safetensors binary
+*.gguf binary
+*.bin binary
+*.faiss binary

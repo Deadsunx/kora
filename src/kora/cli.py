@@ -232,5 +232,91 @@ def compare(
         console.print("[dim]Shared indexes are reused automatically -- no rebuild.[/]")
 
 
+corpus_app = typer.Typer(help="Corpus acquisition and inspection.", no_args_is_help=True)
+app.add_typer(corpus_app, name="corpus")
+
+
+@corpus_app.command("list")
+def corpus_list(
+    status: str = typer.Option("all", help="Filter: all | in_force | superseded."),
+) -> None:
+    """List the documents described by the manifest, and whether we hold them."""
+    from kora.corpus import load_manifest
+
+    manifest = load_manifest()
+    documents = {
+        "all": manifest.documents,
+        "in_force": manifest.in_force(),
+        "superseded": manifest.superseded(),
+    }.get(status)
+    if documents is None:
+        raise typer.BadParameter("status must be one of: all, in_force, superseded")
+
+    table = Table(title=f"Corpus manifest ({len(documents)} documents)")
+    table.add_column("id", style="bold")
+    table.add_column("status")
+    table.add_column("domain")
+    table.add_column("local", justify="right")
+
+    for doc in documents:
+        path = manifest.raw_path(doc)
+        local = f"{path.stat().st_size / 1024:.0f} KB" if path.exists() else "[yellow]absent[/]"
+        colour = "green" if doc.status == "in_force" else "yellow"
+        table.add_row(doc.id, f"[{colour}]{doc.status}[/]", doc.domain, local)
+
+    console.print(table)
+    held = sum(1 for d in documents if manifest.raw_path(d).exists())
+    console.print(f"\n{held}/{len(documents)} present in {paths.RAW_DIR}")
+
+
+@corpus_app.command("download")
+def corpus_download(
+    only: list[str] = typer.Option(
+        None, "--only", help="Restrict to specific document ids. Repeatable."
+    ),
+    force: bool = typer.Option(False, "--force", help="Refetch even if present."),
+) -> None:
+    """Download the corpus PDFs and record provenance for each."""
+    from kora.ingest.download import download_corpus
+
+    manifest = load_manifest_or_exit()
+    results = download_corpus(manifest, only=tuple(only or ()), force=force)
+
+    table = Table(title="Download results")
+    table.add_column("id", style="bold")
+    table.add_column("size", justify="right")
+    table.add_column("sha256")
+    table.add_column("action")
+
+    for document, record, fetched in results:
+        table.add_row(
+            document.id,
+            f"{record.size_bytes / 1024:.0f} KB",
+            record.sha256[:16],
+            "[green]fetched[/]" if fetched else "[dim]cached[/]",
+        )
+    console.print(table)
+
+    total_mb = sum(r.size_bytes for _, r, _ in results) / 1024**2
+    console.print(f"\n{len(results)} documents, {total_mb:.1f} MB total")
+
+
+def load_manifest_or_exit():
+    """Load the manifest, turning validation errors into a readable message."""
+    from pydantic import ValidationError
+
+    from kora.corpus import load_manifest
+
+    try:
+        return load_manifest()
+    except FileNotFoundError as exc:
+        console.print(f"[red]Manifest not found:[/] {exc}")
+        raise typer.Exit(1) from exc
+    except ValidationError as exc:
+        console.print("[red]Manifest is invalid:[/]")
+        console.print(str(exc))
+        raise typer.Exit(1) from exc
+
+
 if __name__ == "__main__":
     app()
