@@ -385,6 +385,274 @@ def corpus_parse(
         console.print(f"\nArticles written to [dim]{paths.INTERIM_DIR}[/]")
 
 
+@corpus_app.command("search")
+def corpus_search(
+    query: str = typer.Argument(..., help="Case-insensitive substring or regex."),
+    regex: bool = typer.Option(False, "--regex", help="Treat the query as a regex."),
+    only: list[str] = typer.Option(None, "--only", help="Restrict to specific document ids."),
+    limit: int = typer.Option(15, "--limit", help="Maximum articles to show."),
+    chars: int = typer.Option(300, "--chars", help="Characters of body to print."),
+) -> None:
+    """Search parsed article text.
+
+    Written for building and checking the gold question set. A question whose
+    gold article was chosen from memory rather than from the text is worthless,
+    and the reviewer needs the same lookup to verify it -- so this is a real
+    command rather than a throwaway script.
+    """
+    import json
+    import re as _re
+
+    pattern = _re.compile(query if regex else _re.escape(query), _re.IGNORECASE)
+    wanted = set(only or ())
+
+    shown = 0
+    total = 0
+    for path in sorted(paths.INTERIM_DIR.glob("*.articles.jsonl")):
+        document_id = path.name.removesuffix(".articles.jsonl")
+        if wanted and document_id not in wanted:
+            continue
+        with path.open("r", encoding="utf-8") as handle:
+            for line in handle:
+                article = json.loads(line)
+                haystack = f"{article['rubric']}\n{article['text']}"
+                if not pattern.search(haystack):
+                    continue
+                total += 1
+                if shown >= limit:
+                    continue
+                shown += 1
+                citation = f"article {article['number']} {article['abbrev']}"
+                console.print(f"\n[bold cyan]{citation}[/]  [dim]{article['document_id']}[/]")
+                console.print(f"  [dim]id:[/] {document_id}#art{article['number']}")
+                if article["hierarchy"]:
+                    console.print(f"  [dim]{' > '.join(article['hierarchy'])}[/]")
+                if article["rubric"]:
+                    console.print(f"  [italic]{article['rubric']}[/]")
+                body = article["text"][:chars].replace("\n", " ")
+                console.print(f"  {body}{'...' if len(article['text']) > chars else ''}")
+
+    console.print(
+        f"\n[bold]{total} article(s) matched[/]" + (f", showing {shown}" if total > shown else "")
+    )
+    if not total:
+        console.print("[dim]Nothing found. Have you run `kora corpus parse`?[/]")
+
+
+@corpus_app.command("show")
+def corpus_show(
+    chunk_id: str = typer.Argument(..., help="e.g. AUSCGIE-2014#art477"),
+) -> None:
+    """Print one article in full, by chunk id."""
+    import json
+
+    if "#art" not in chunk_id:
+        raise typer.BadParameter("expected the form DOCUMENT-ID#artNUMBER")
+    document_id, number = chunk_id.split("#art", 1)
+
+    path = paths.INTERIM_DIR / f"{document_id}.articles.jsonl"
+    if not path.exists():
+        console.print(f"[red]No parsed articles for {document_id}[/]")
+        raise typer.Exit(1)
+
+    with path.open("r", encoding="utf-8") as handle:
+        for line in handle:
+            article = json.loads(line)
+            if article["number"] != number:
+                continue
+            console.print(f"[bold cyan]article {number} {article['abbrev']}[/]")
+            console.print(f"[dim]{article['document_id']}  ({article['status']})[/]")
+            if article["hierarchy"]:
+                console.print(f"[dim]{' > '.join(article['hierarchy'])}[/]")
+            if article["rubric"]:
+                console.print(f"[italic]{article['rubric']}[/]\n")
+            console.print(article["text"])
+            return
+
+    console.print(f"[red]Article {number} not found in {document_id}[/]")
+    raise typer.Exit(1)
+
+
+eval_app = typer.Typer(help="Evaluation set and experiment runs.", no_args_is_help=True)
+app.add_typer(eval_app, name="eval")
+
+
+@eval_app.command("validate")
+def eval_validate(
+    path: Path = typer.Option(paths.EVAL_DIR / "gold_qa.jsonl", "--path", help="Gold set file."),
+    show_text: bool = typer.Option(False, "--show-text", help="Print each gold article."),
+) -> None:
+    """Check the gold set against the parsed corpus.
+
+    The one failure this must never allow: a question whose gold article does
+    not exist. Such a question is unanswerable by construction, so every system
+    scores zero on it and the metric silently measures nothing. Cheaper to
+    catch here than to explain in a results table.
+    """
+    import json
+
+    from kora.eval.dataset import load_gold_set
+
+    if not path.exists():
+        console.print(f"[red]No gold set at {path}[/]")
+        raise typer.Exit(1)
+
+    gold = load_gold_set(path)
+
+    # Index every parsed article so gold ids can be resolved.
+    known: dict[str, dict] = {}
+    for articles_path in sorted(paths.INTERIM_DIR.glob("*.articles.jsonl")):
+        document_id = articles_path.name.removesuffix(".articles.jsonl")
+        with articles_path.open("r", encoding="utf-8") as handle:
+            for line in handle:
+                article = json.loads(line)
+                known[f"{document_id}#art{article['number']}"] = article
+
+    if not known:
+        console.print("[red]No parsed articles found. Run `kora corpus parse` first.[/]")
+        raise typer.Exit(1)
+
+    dangling: list[tuple[str, str]] = []
+    for question in gold:
+        for chunk_id in question.gold_chunk_ids:
+            if chunk_id not in known:
+                dangling.append((question.id, chunk_id))
+
+    table = Table(title="Gold set composition")
+    table.add_column("property", style="bold")
+    table.add_column("value", justify="right")
+    for key, value in gold.composition().items():
+        table.add_row(key, str(value))
+    console.print(table)
+
+    console.print(f"\ncorpus articles indexed: {len(known)}")
+    console.print(f"documents referenced: {', '.join(sorted(gold.referenced_documents()))}")
+
+    if dangling:
+        console.print(f"\n[red]{len(dangling)} gold article(s) do not exist:[/]")
+        for question_id, chunk_id in dangling:
+            console.print(f"  {question_id} -> {chunk_id}")
+        raise typer.Exit(1)
+
+    console.print("\n[green]All gold articles resolve to parsed articles.[/]")
+
+    if show_text:
+        for q in gold:
+            console.print(f"\n[bold]{q.id}[/] [dim]({q.kind}, {q.provenance})[/]")
+            console.print(f"  Q: {q.question}")
+            for chunk_id in q.gold_chunk_ids:
+                article = known[chunk_id]
+                body = " ".join(article["text"].split())[:220]
+                console.print(f"  [cyan]{chunk_id}[/] {body}...")
+
+
+@eval_app.command("review")
+def eval_review(
+    kind: str = typer.Option(None, "--kind", help="Filter by question kind."),
+    start: int = typer.Option(0, "--start", help="Skip the first N questions."),
+    count: int = typer.Option(10, "--count", help="How many to display."),
+    path: Path = typer.Option(paths.EVAL_DIR / "gold_qa.jsonl", "--path"),
+) -> None:
+    """Print questions beside the full text of their gold articles.
+
+    The review loop: read the article, decide whether it truly answers the
+    question, then promote the ones that do. Anything not promoted stays out of
+    every reported number, so an unreviewed question costs nothing but an
+    incorrectly promoted one costs the credibility of the whole table.
+    """
+    import json
+
+    from kora.eval.dataset import load_gold_set
+
+    gold = load_gold_set(path)
+    questions = [q for q in gold if not kind or q.kind == kind]
+
+    known: dict[str, dict] = {}
+    for articles_path in sorted(paths.INTERIM_DIR.glob("*.articles.jsonl")):
+        document_id = articles_path.name.removesuffix(".articles.jsonl")
+        with articles_path.open("r", encoding="utf-8") as handle:
+            for line in handle:
+                article = json.loads(line)
+                known[f"{document_id}#art{article['number']}"] = article
+
+    window = questions[start : start + count]
+    for question in window:
+        console.print(f"\n[bold yellow]{'─' * 72}[/]")
+        mark = "[green]validated[/]" if question.counts_towards_headline else "[yellow]draft[/]"
+        console.print(f"[bold]{question.id}[/]  [dim]{question.kind}[/]  {mark}")
+        console.print(f"\n  [bold]Q[/] {question.question}")
+        if question.reference_answer:
+            console.print(f"  [bold]A[/] [dim]{question.reference_answer}[/]")
+        if question.note:
+            console.print(f"  [italic dim]note: {question.note}[/]")
+
+        if not question.gold_chunk_ids:
+            console.print("\n  [dim](unanswerable - no gold articles by design)[/]")
+            continue
+        for chunk_id in question.gold_chunk_ids:
+            article = known.get(chunk_id)
+            console.print(f"\n  [cyan]{chunk_id}[/]")
+            if article is None:
+                console.print("    [red]MISSING FROM CORPUS[/]")
+                continue
+            if article["rubric"]:
+                console.print(f"    [italic]{article['rubric']}[/]")
+            console.print(f"    {' '.join(article['text'].split())[:700]}")
+
+    console.print(
+        f"\n[bold]Showed {len(window)} of {len(questions)}"
+        f"{f' ({kind})' if kind else ''}.[/]"
+        f"  Next: --start {start + count}"
+    )
+
+
+@eval_app.command("promote")
+def eval_promote(
+    question_ids: list[str] = typer.Argument(..., help="Question ids you have verified."),
+    path: Path = typer.Option(paths.EVAL_DIR / "gold_qa.jsonl", "--path"),
+    demote: bool = typer.Option(False, "--demote", help="Send back to draft instead."),
+) -> None:
+    """Mark reviewed questions as human-validated, making them count.
+
+    Only promoted questions appear in reported results. This is the single
+    gate between "a model wrote a plausible question" and "a person checked it
+    against the article", and it is deliberately a separate, explicit action.
+    """
+    import json
+
+    from kora.eval.dataset import load_gold_set
+
+    gold = load_gold_set(path)
+    target = "llm_drafted" if demote else "llm_drafted_human_validated"
+    wanted = set(question_ids)
+
+    unknown = wanted - {q.id for q in gold}
+    if unknown:
+        console.print(f"[red]Unknown question ids: {sorted(unknown)}[/]")
+        raise typer.Exit(1)
+
+    changed = 0
+    lines: list[str] = []
+    for question in gold:
+        payload = question.model_dump(mode="json")
+        if question.id in wanted and payload["provenance"] != target:
+            # Human-written questions are never relabelled; there is nothing to
+            # upgrade and overwriting the record would lose real provenance.
+            if payload["provenance"] == "human":
+                console.print(f"[dim]{question.id} is human-written, left unchanged[/]")
+            else:
+                payload["provenance"] = target
+                changed += 1
+        lines.append(json.dumps(payload, ensure_ascii=False))
+
+    path.write_text("\n".join(lines) + "\n", encoding="utf-8")
+
+    reloaded = load_gold_set(path)
+    verb = "demoted" if demote else "promoted"
+    console.print(f"[green]{verb} {changed} question(s).[/]")
+    console.print(f"headline-eligible: {len(reloaded.headline())} / {len(reloaded)}")
+
+
 def load_manifest_or_exit():
     """Load the manifest, turning validation errors into a readable message."""
     from pydantic import ValidationError
