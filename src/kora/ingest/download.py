@@ -174,8 +174,15 @@ def download_corpus(
     only: tuple[str, ...] = (),
     force: bool = False,
     timeout: float = 60.0,
-) -> list[tuple[Document, Provenance, bool]]:
-    """Download every document in the manifest (or a named subset)."""
+    skip_unsourced: bool = True,
+) -> tuple[list[tuple[Document, Provenance, bool]], list[tuple[Document, str]]]:
+    """Download the manifest (or a named subset). Returns (successes, failures).
+
+    Failures are collected rather than raised. A batch of eighteen documents
+    spread across several government portals will hit a dead link eventually,
+    and aborting the run at the first one means re-fetching everything that
+    already worked. The caller reports both lists, so nothing is silently lost.
+    """
     targets = [d for d in manifest.documents if not only or d.id in only]
     if only:
         unknown = set(only) - {d.id for d in manifest.documents}
@@ -183,14 +190,24 @@ def download_corpus(
             raise KeyError(f"unknown document ids: {sorted(unknown)}")
 
     results: list[tuple[Document, Provenance, bool]] = []
+    failures: list[tuple[Document, str]] = []
     headers = {"User-Agent": USER_AGENT}
 
     with httpx.Client(timeout=timeout, headers=headers, follow_redirects=True) as client:
         for document in targets:
-            path, record, fetched = download_document(
-                document, manifest, client=client, force=force
-            )
-            assert path.exists()
+            # Documents awaiting source discovery are a known state, not an
+            # error. Only chase them when asked for by name.
+            if skip_unsourced and not document.sources and not only:
+                failures.append((document, "no source URL recorded yet"))
+                continue
+            try:
+                _, record, fetched = download_document(
+                    document, manifest, client=client, force=force
+                )
+            except (DownloadError, httpx.HTTPError) as exc:
+                log.warning("download failed", document=document.id, error=str(exc))
+                failures.append((document, str(exc).replace("\n", " ")))
+                continue
             results.append((document, record, fetched))
 
-    return results
+    return results, failures

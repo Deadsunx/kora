@@ -280,7 +280,7 @@ def corpus_download(
     from kora.ingest.download import download_corpus
 
     manifest = load_manifest_or_exit()
-    results = download_corpus(manifest, only=tuple(only or ()), force=force)
+    results, failures = download_corpus(manifest, only=tuple(only or ()), force=force)
 
     table = Table(title="Download results")
     table.add_column("id", style="bold")
@@ -299,6 +299,11 @@ def corpus_download(
 
     total_mb = sum(r.size_bytes for _, r, _ in results) / 1024**2
     console.print(f"\n{len(results)} documents, {total_mb:.1f} MB total")
+
+    if failures:
+        console.print(f"\n[yellow]{len(failures)} not retrieved:[/]")
+        for document, reason in failures:
+            console.print(f"  [bold]{document.id}[/]  {reason[:150]}")
 
 
 @corpus_app.command("parse")
