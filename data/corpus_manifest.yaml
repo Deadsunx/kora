@@ -58,6 +58,16 @@ documents:
     domain: recouvrement et exécution
     status: in_force
     supersedes: AUPSRVE-1998
+    sources:
+      - https://justice.sec.gouv.sn/wp-content/uploads/textes-reglements/OHADA/Acte-uniforme-portant-organisation-des-procedures-simplifiees-de-recouvrement-et-des-voies-dexecution-.pdf
+    notes: >-
+      VERSION UNVERIFIED. This URL carries no year, and both the 1998 and 2023
+      texts exist. The adoption date must be confirmed inside the PDF before
+      this document is trusted as the in-force version -- mislabelling it would
+      put a repealed text into the in_force filter, which is precisely the error
+      this manifest exists to prevent. This is also the act the reference
+      dataset extracted at 242 of ~335 articles, so it is the headline
+      comparison for the parser.
 
   - id: SYCEBNL-2022
     abbrev: SYCEBNL
@@ -76,6 +86,14 @@ documents:
     domain: arbitrage
     status: in_force
     supersedes: AUA-1999
+    sources:
+      - https://justice.sec.gouv.sn/wp-content/uploads/textes-reglements/OHADA/Acte-uniforme-relatif-droit-arbitrage-jo-special-15-dec-2017.pdf
+    notes: >-
+      The Journal Officiel special edition of 15 December 2017 carries BOTH the
+      arbitration act and the mediation act. This single PDF therefore likely
+      contains two acts, and the parser must not merge them -- article numbering
+      restarts at 1, which the gap check would report as a duplicate rather than
+      a gap. Handle before ingesting AUM-2017 from the same file.
 
   - id: AUM-2017
     abbrev: AUM
@@ -84,6 +102,11 @@ documents:
     title: Acte uniforme relatif à la médiation
     domain: médiation
     status: in_force
+    sources:
+      - https://justice.sec.gouv.sn/wp-content/uploads/textes-reglements/OHADA/Acte-uniforme-relatif-droit-arbitrage-jo-special-15-dec-2017.pdf
+    notes: >-
+      Shares a source PDF with AUA-2017 (same JO special edition). Requires
+      splitting the document by act before parsing.
 
   - id: AUDCIF-2017
     abbrev: AUDCIF
@@ -94,6 +117,14 @@ documents:
     domain: droit comptable
     status: in_force
     supersedes: AUCE-2000
+    sources:
+      - https://justice.sec.gouv.sn/wp-content/uploads/textes-reglements/OHADA/Acte-uniforme-relatif-droit-comptable-information-financiere-JAN-2017-JO.pdf
+      - https://www.oneccabf.org/wp-content/uploads/0.611.01.17-Acte-uniforme-du-26-janvier-2017_Droit-comptable.pdf
+      - https://naturaljustice.org/wp-content/uploads/2022/04/Acte-uniforme-relatif-au-droit-comptable-et-a-linformation-financiere.pdf
+    notes: >-
+      Carries the SYSCOHADA accounting system as an annex. Expect large tables
+      and chart-of-accounts listings that are not article text; watch the
+      coverage metric, which will legitimately sit lower here than elsewhere.
 
   - id: AUPCAP-2015
     abbrev: AUPCAP
@@ -105,6 +136,8 @@ documents:
     domain: procédures collectives
     status: in_force
     supersedes: AUPCAP-1998
+    sources:
+      - https://justice.sec.gouv.sn/wp-content/uploads/textes-reglements/OHADA/Acte-uniforme-procedures-collectives-apurement-passif-JO-sep-2015.pdf
 
   - id: AUSCGIE-2014
     abbrev: AUSCGIE
@@ -147,6 +180,8 @@ documents:
     title: Acte uniforme relatif au droit des sociétés coopératives
     domain: sociétés coopératives
     status: in_force
+    sources:
+      - https://justice.sec.gouv.sn/wp-content/uploads/textes-reglements/OHADA/Acte-uniforme-relatif-au-droit-des-societes-cooperatives-lome-15122010.pdf
 
   - id: AUDCG-2010
     abbrev: AUDCG
@@ -156,6 +191,8 @@ documents:
     domain: droit commercial général
     status: in_force
     supersedes: AUDCG-1997
+    sources:
+      - https://justice.sec.gouv.sn/wp-content/uploads/textes-reglements/OHADA/Acte-uniforme-portant-sur-le-droit-commercial-general-lome-15102010.pdf
 
   - id: AUCTMR-2003
     abbrev: AUCTMR
@@ -165,6 +202,8 @@ documents:
       Acte uniforme relatif aux contrats de transport de marchandises par route
     domain: transport routier de marchandises
     status: in_force
+    sources:
+      - https://justice.sec.gouv.sn/wp-content/uploads/textes-reglements/OHADA/Acte-uniforme-relatif-contrats-transport-marchandises-route.pdf
 
   # -- Superseded: kept as distractors and for historical questions ----------
 
