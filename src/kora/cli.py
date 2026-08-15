@@ -301,6 +301,85 @@ def corpus_download(
     console.print(f"\n{len(results)} documents, {total_mb:.1f} MB total")
 
 
+@corpus_app.command("parse")
+def corpus_parse(
+    only: list[str] = typer.Option(None, "--only", help="Restrict to specific ids."),
+    show: int = typer.Option(0, "--show", help="Print the first N parsed articles."),
+) -> None:
+    """Parse downloaded PDFs into structured articles and report extraction quality.
+
+    The `gaps` column is the one to watch. Legal texts number articles
+    contiguously, so a non-zero count means headings were swallowed and the
+    parse is lossy -- which is exactly the failure that silently cost the
+    published reference corpus 28% of one act.
+    """
+    import json
+
+    from kora.ingest.parse import ParseError, parse_pdf
+
+    manifest = load_manifest_or_exit()
+    targets = [d for d in manifest.documents if not only or d.id in only]
+
+    table = Table(title="Parse results")
+    table.add_column("id", style="bold")
+    table.add_column("pages", justify="right")
+    table.add_column("articles", justify="right")
+    table.add_column("gaps", justify="right")
+    table.add_column("coverage", justify="right")
+    table.add_column("rubrics", justify="right")
+    table.add_column("hierarchy", justify="right")
+    table.add_column("status")
+
+    parsed_any = False
+    for document in targets:
+        pdf_path = manifest.raw_path(document)
+        if not pdf_path.exists():
+            table.add_row(document.id, *["-"] * 5, "[yellow]not downloaded[/]")
+            continue
+        try:
+            parsed = parse_pdf(pdf_path, document)
+        except ParseError as exc:
+            table.add_row(document.id, *["-"] * 5, f"[red]{exc}[/]")
+            continue
+
+        gaps = parsed.numbering_gaps()
+        total = max(len(parsed), 1)
+        rubrics = sum(1 for a in parsed.articles if a.rubric)
+        placed = sum(1 for a in parsed.articles if a.hierarchy)
+        coverage = parsed.text_coverage
+        table.add_row(
+            document.id,
+            str(parsed.page_count),
+            str(len(parsed)),
+            f"[red]{len(gaps)}[/]" if gaps else "[green]0[/]",
+            f"[green]{coverage:.1%}[/]" if coverage > 0.9 else f"[yellow]{coverage:.1%}[/]",
+            f"{rubrics * 100 // total}%",
+            f"{placed * 100 // total}%",
+            "[green]ok[/]" if not gaps and coverage > 0.9 else "[yellow]check[/]",
+        )
+
+        destination = paths.INTERIM_DIR / f"{document.id}.articles.jsonl"
+        destination.parent.mkdir(parents=True, exist_ok=True)
+        with destination.open("w", encoding="utf-8") as handle:
+            for article in parsed.articles:
+                handle.write(json.dumps(article.model_dump(mode="json"), ensure_ascii=False))
+                handle.write("\n")
+        parsed_any = True
+
+        if show:
+            for article in parsed.articles[:show]:
+                console.print(f"\n[bold cyan]{article.citation}[/]")
+                if article.hierarchy:
+                    console.print(f"  [dim]{' > '.join(article.hierarchy)}[/]")
+                if article.rubric:
+                    console.print(f"  [italic]{article.rubric}[/]")
+                console.print(f"  {article.text[:400]}")
+
+    console.print(table)
+    if parsed_any:
+        console.print(f"\nArticles written to [dim]{paths.INTERIM_DIR}[/]")
+
+
 def load_manifest_or_exit():
     """Load the manifest, turning validation errors into a readable message."""
     from pydantic import ValidationError

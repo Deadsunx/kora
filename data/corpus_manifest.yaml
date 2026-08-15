@@ -26,6 +26,20 @@
 # of the same scope repeals its predecessor). It is a research-grade annotation,
 # not legal advice, and is asserted as such in the generated answers.
 
+# ---------------------------------------------------------------------------
+# On sources
+# ---------------------------------------------------------------------------
+# There is no single host that serves every act to an automated client:
+#   - ohada.com          requires a login (returns an HTML sign-in page)
+#   - droit-afrique.com  returns 403 to any non-browser user agent
+# so the corpus is assembled from national government portals, which publish the
+# Journal Officiel texts openly. Each document therefore carries its own ordered
+# list of candidate URLs rather than sharing a template, and the downloader
+# falls through the list until one returns real PDF bytes.
+#
+# `url_template` is retained only as a last-resort fallback for documents whose
+# source has not been located yet.
+
 version: 1
 source_index: https://www.ohada.com/textes-ohada/actes-uniformes.html
 url_template: https://www.ohada.com/telechargement/actes-uniformes/{id}_fr.pdf
@@ -102,9 +116,20 @@ documents:
     domain: sociétés commerciales
     status: in_force
     supersedes: AUSCGIE-1997
+    sources:
+      # Congo, Secretariat General du Gouvernement. Smallest file (637 KB) of
+      # the three, which usually means a real text layer rather than a scan.
+      - https://www.sgg.cg/txts-droit-reg/OHADA-Acte-uniforme-2014-societes-commerciales-gie.pdf
+      # Senegal, Ministere de la Justice -- Journal Officiel of 2014-02-04.
+      - https://justice.sec.gouv.sn/wp-content/uploads/textes-reglements/OHADA/Acte-uniforme-relatif-droit-societes-commerciales-gie-auscgie-jo-fevrier-2014.pdf
+      # Cameroon eRegulations. 4.2 MB for the same act: almost certainly a scan,
+      # kept last as an OCR fallback only.
+      - https://garoua.eregulations.org/media/OHADA%202014_1.pdf
     notes: >-
       Largest act in the corpus and the most likely subject of user questions
       (company formation, governance, capital). Expect it to dominate retrieval.
+      1392 articles according to the Maathis-com/ohada-actes-uniformes dataset,
+      which is the reference our parser is measured against.
 
   - id: AUS-2010
     abbrev: AUS

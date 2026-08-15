@@ -93,7 +93,6 @@ def download_document(
     """
     destination = manifest.raw_path(document)
     provenance_path = destination.with_suffix(".provenance.json")
-    url = manifest.url_for(document)
 
     if destination.exists() and provenance_path.exists() and not force:
         record = Provenance(**json.loads(provenance_path.read_text(encoding="utf-8")))
@@ -102,21 +101,41 @@ def download_document(
             return destination, record, False
         log.warning("checksum mismatch on local file, refetching", document=document.id)
 
-    log.info("downloading", document=document.id, url=url)
-    response = _fetch(client, url)
+    # Try each candidate source in order. Government portals go down, move
+    # documents, and occasionally serve a login wall; the first URL that yields
+    # real PDF bytes wins, and every failure is logged rather than swallowed.
+    candidates = manifest.urls_for(document)
+    failures: list[str] = []
+    response: httpx.Response | None = None
+    url = ""
+
+    for candidate in candidates:
+        log.info("downloading", document=document.id, url=candidate)
+        try:
+            attempt = _fetch(client, candidate)
+        except (httpx.TransportError, httpx.HTTPStatusError) as exc:
+            failures.append(f"{candidate}: {type(exc).__name__}: {exc}")
+            log.warning("source failed", document=document.id, url=candidate, error=str(exc))
+            continue
+
+        # The failure mode this catches: a site returning a styled 404 or a
+        # login page with status 200. Without the check it lands on disk as a
+        # "PDF" and the parser produces a document full of navigation text.
+        if not attempt.content.startswith(b"%PDF"):
+            preview = attempt.content[:100].decode("utf-8", errors="replace")
+            failures.append(f"{candidate}: not a PDF ({preview!r})")
+            log.warning("source returned non-PDF", document=document.id, url=candidate)
+            continue
+
+        response, url = attempt, candidate
+        break
+
+    if response is None:
+        detail = "\n  ".join(failures) if failures else "no candidate URLs configured"
+        raise DownloadError(f"{document.id}: no usable source.\n  {detail}")
 
     content_type = response.headers.get("content-type", "")
     body = response.content
-
-    # The failure mode this catches: a site that returns a styled 404 page with
-    # status 200. Without the check it lands on disk as a "PDF" and the parser
-    # produces a document full of navigation text.
-    if not body.startswith(b"%PDF"):
-        preview = body[:120].decode("utf-8", errors="replace")
-        raise DownloadError(
-            f"{document.id}: response is not a PDF "
-            f"(content-type={content_type!r}, starts with {preview!r})"
-        )
 
     destination.parent.mkdir(parents=True, exist_ok=True)
     # Write to a temporary file first: an interrupted download must never leave

@@ -35,6 +35,17 @@ class Document(BaseModel):
     superseded_by: str | None = None
     notes: str = ""
 
+    # Ordered list of candidate URLs, best first. There is no single site that
+    # serves every act to an automated client: ohada.com requires a login and
+    # droit-afrique.com returns 403 to non-browser agents, so the corpus is
+    # assembled from several national government portals. Multiple sources per
+    # document are a feature, not redundancy -- one host going offline mid
+    # project must not make the corpus unreproducible.
+    sources: tuple[str, ...] = ()
+
+    # Set when the only available copy is a scan and needs OCR.
+    scanned: bool = False
+
     @model_validator(mode="after")
     def _status_matches_links(self) -> Document:
         """A document is superseded if and only if something supersedes it.
@@ -114,9 +125,21 @@ class CorpusManifest(BaseModel):
     def superseded(self) -> tuple[Document, ...]:
         return tuple(d for d in self.documents if d.status == "superseded")
 
+    def urls_for(self, document: Document | str) -> tuple[str, ...]:
+        """Candidate download URLs for a document, in preference order."""
+        doc = self.get(document) if isinstance(document, str) else document
+        if doc.sources:
+            return doc.sources
+        # Fall back to the template for documents whose source is not yet known.
+        return (self.url_template.format(id=doc.id),)
+
     def url_for(self, document: Document | str) -> str:
-        doc_id = document if isinstance(document, str) else document.id
-        return self.url_template.format(id=doc_id)
+        """The preferred download URL for a document."""
+        return self.urls_for(document)[0]
+
+    def pending_sources(self) -> tuple[Document, ...]:
+        """Documents with no verified source URL yet."""
+        return tuple(d for d in self.documents if not d.sources)
 
     def raw_path(self, document: Document | str) -> Path:
         doc_id = document if isinstance(document, str) else document.id
