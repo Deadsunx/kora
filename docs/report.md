@@ -1,6 +1,6 @@
 # Kora: a measured retrieval system for French-language African business law
 
-Technical report · August 2026 · 3,056 articles · 59 validated questions · 14
+Technical report · August 2026 · 3,056 articles · 64 validated questions · 23
 recorded runs · 252 tests · one RTX 4070 Laptop, 8 GiB
 
 ---
@@ -9,7 +9,7 @@ recorded runs · 252 tests · one RTX 4070 Laptop, 8 GiB
 
 Kora answers questions about the **Actes uniformes OHADA** — the business law
 shared by 17 mostly francophone African states — with citations to specific
-articles, or refuses to answer. It reaches **recall@5 = 0.824** at 193 ms, and
+articles, or refuses to answer. It reaches **recall@5 = 0.815** at 205 ms, and
 generates answers that never fabricate a citation, never present repealed text as
 law, and correctly decline 7 of 8 unanswerable questions.
 
@@ -271,16 +271,18 @@ time, because that is what a user waits for.
 
 | system | recall@1 | recall@5 | MRR | nDCG@5 | median |
 |---|---:|---:|---:|---:|---:|
-| BM25 only | 0.382 | 0.637 | 0.550 | 0.544 | **5 ms** |
-| dense + BM25 (RRF) | 0.431 | 0.716 | 0.611 | 0.612 | 26 ms |
-| dense — frozen baseline | 0.490 | 0.735 | 0.647 | 0.647 | 19 ms |
-| dense + BM25 + rerank, pool 50 | 0.608 | 0.804 | 0.755 | 0.742 | 1592 ms |
-| dense + BM25 + rerank, pool 20 | 0.598 | **0.824** | 0.739 | 0.742 | 636 ms |
-| dense + rerank, pool 20 | 0.598 | **0.824** | 0.740 | 0.744 | 530 ms |
-| **dense + rerank, fp16, 512 tok** | **0.647** | **0.824** | **0.776** | **0.766** | **193 ms** |
+| BM25 only | 0.381 | 0.637 | 0.576 | 0.551 | **5 ms** |
+| dense + BM25 (RRF) | 0.417 | 0.708 | 0.625 | 0.611 | 26 ms |
+| dense — frozen baseline | 0.461 | 0.735 | 0.652 | 0.641 | 17 ms |
+| dense + BM25 + rerank, pool 50 | 0.622 | 0.815 | **0.800** | 0.763 | 461 ms |
+| dense + BM25 + rerank, pool 20 | 0.613 | **0.824** | 0.786 | 0.760 | 235 ms |
+| **dense + rerank, fp16, 512 tok** | **0.631** | 0.815 | 0.796 | **0.765** | **205 ms** |
 
-**Best system: the last row. +8.9 points of recall@5 over the baseline, +12%
-relative, at 193 ms median and 247 ms p90.**
+**Best system: the last row. +8.0 points of recall@5 over the baseline, +11%
+relative, at 205 ms median and 256 ms p90.**
+
+These figures were re-measured after §4's `cross_act` category was rebuilt from
+4 questions to 9, which grew the gold set to 64 and changed one conclusion.
 
 ### Finding 1: the BM25 hypothesis is refuted
 
@@ -298,8 +300,13 @@ It does not, at any point in the pipeline:
   articles that dense missed, visible as better recall@20, but it displaces
   dense's precise top hits doing it. At `final_k=5`, which is what reaches the
   generator, that trade is a loss.
-- **Under reranking**, it contributes *nothing measurable*: identical recall@5,
-  MRR within 0.001, nDCG within 0.002 — for about 100 ms per query.
+- **Under reranking**, it was written up as contributing *nothing measurable*.
+  That was true on a gold set whose `cross_act` category was four questions and
+  never moved. Rebuilt to nine, BM25's effect appears — and appears in exactly
+  one place: **cross_act recall@5 +0.056, and 0.000 on lookup, multi_hop and
+  temporal alike.** It is half a question, bought with recall@1, MRR and 30 ms,
+  and BM25 is still not shipped. But the original claim was stronger than its
+  evidence, and the category was too small to have supported it.
 
 The mechanism behind the hypothesis was real. BM25 genuinely retrieves articles
 dense retrieval misses, which is why recall@20 improves. It just does not survive

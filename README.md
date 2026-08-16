@@ -43,8 +43,8 @@ is a preference, not a result.
 
 ## What exists
 
-**3,056 articles** parsed from source PDFs across 10 acts · **59 human-validated
-questions**, 51 answerable · **14 recorded runs** · 252 tests · single RTX 4070
+**3,056 articles** parsed from source PDFs across 10 acts · **64 human-validated
+questions**, 56 answerable · **23 recorded runs** · 252 tests · single RTX 4070
 Laptop, 8 GiB.
 
 | | |
@@ -61,15 +61,18 @@ Laptop, 8 GiB.
 
 | system | recall@5 | MRR | nDCG@5 | latency (median) |
 |---|---:|---:|---:|---:|
-| BM25 only | 0.637 | 0.550 | 0.544 | **5 ms** |
-| dense + BM25 (RRF) | 0.716 | 0.611 | 0.612 | 26 ms |
-| dense (frozen baseline) | 0.735 | 0.647 | 0.647 | 19 ms |
-| dense + BM25 + rerank, pool 50 | 0.804 | 0.755 | 0.742 | 1592 ms |
-| dense + rerank, pool 20 | **0.824** | 0.740 | 0.744 | 530 ms |
-| **dense + rerank, fp16, 512 tokens** | **0.824** | **0.776** | **0.766** | **193 ms** |
+| BM25 only | 0.637 | 0.576 | 0.551 | **5 ms** |
+| dense + BM25 (RRF) | 0.708 | 0.625 | 0.611 | 26 ms |
+| dense (frozen baseline) | 0.735 | 0.652 | 0.641 | 17 ms |
+| dense + BM25 + rerank, pool 50 | 0.815 | **0.800** | 0.763 | 461 ms |
+| dense + BM25 + rerank, pool 20 | **0.824** | 0.786 | 0.760 | 235 ms |
+| **dense + rerank, fp16, 512 tokens** | 0.815 | 0.796 | **0.765** | **205 ms** |
 
-**+8.9 points of recall@5 over the baseline (+12% relative), at 193 ms.**
+**+8.0 points of recall@5 over the baseline (+11% relative), at 205 ms.**
 Reranking is the only component that earned its cost.
+
+These were re-measured after `cross_act` was rebuilt (below), which grew the
+gold set from 59 questions to 64 and **changed one conclusion**.
 
 ### Generation — [`docs/generation-baseline.md`](docs/generation-baseline.md)
 
@@ -139,11 +142,14 @@ rather than prefill. Throughput is flat by design and the wall clock proves it:
 
 ## Six findings, five of them negative
 
-1. **BM25 does not help on legal French.** The hypothesis was recorded in
-   `configs/experiments/02_hybrid.yaml` *before* measurement: exact tokens like
-   article numbers should favour lexical search. Refuted three independent ways —
-   alone, fused, and under reranking, where it contributes nothing measurable for
-   ~100 ms per query.
+1. **BM25 does not help on legal French — except in one place.** The hypothesis
+   was recorded in `configs/experiments/02_hybrid.yaml` *before* measurement:
+   exact tokens like article numbers should favour lexical search. Refuted alone
+   and fused. Under reranking it was written up as contributing *nothing
+   measurable* — until `cross_act` was rebuilt, at which point its whole effect
+   appeared there and only there: **+0.056 recall@5 on cross-act questions, and
+   0.000 on every other kind.** Still half a question, still not shipped, but the
+   original claim was stronger than the evidence.
 2. **A wider candidate pool made reranking worse.** Pool 50 against pool 20:
    lower recall@5 and 2.5× slower. More candidates gave distractors more chances
    to score into the top five than true positives had to be rescued.
@@ -285,9 +291,10 @@ Each phase ends by reading raw outputs.
 - **n = 51 answerable questions.** Differences of one or two points are noise.
   The BM25 result holds because it is consistent across three independent
   comparisons, not because any single one is decisive.
-- **`cross_act` is 4 questions and never moved** across any system. That is a
-  count, not a measurement. Rebuilding it from real inter-act cross-references is
-  outstanding.
+- **`cross_act` was 4 questions and never moved.** Rebuilt from real inter-act
+  textual bridges to 9 questions, at which point the row responds and BM25's one
+  measurable contribution appeared. It is still 9 questions: a direction, not a
+  magnitude.
 - **`answers_citing_repealed` is near-vacuous.** The corpus holds three repealed
   articles and none of the seven superseded acts, so 0.000 means "the situation
   rarely arose", not "the system is safe".

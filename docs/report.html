@@ -387,8 +387,8 @@
     </p>
     <div class="colophon">
       <span><b>3,056</b> articles, 10 acts</span>
-      <span><b>59</b> validated questions</span>
-      <span><b>14</b> recorded runs</span>
+      <span><b>64</b> validated questions</span>
+      <span><b>23</b> recorded runs</span>
       <span><b>252</b> tests</span>
       <span>one RTX 4070 Laptop, 8&nbsp;GiB</span>
     </div>
@@ -396,14 +396,14 @@
 
   <div class="figures">
     <div class="fig">
-      <span class="fig-n pos">0.824</span>
+      <span class="fig-n pos">0.815</span>
       <span class="fig-l">recall@5</span>
-      <span class="fig-s">+8.9 points over the frozen baseline</span>
+      <span class="fig-s">+8.0 points over the frozen baseline</span>
     </div>
     <div class="fig">
-      <span class="fig-n">193 ms</span>
+      <span class="fig-n">205 ms</span>
       <span class="fig-l">retrieval, median</span>
-      <span class="fig-s">down from 538 ms, and more accurate</span>
+      <span class="fig-s">down from 567 ms, and more accurate</span>
     </div>
     <div class="fig">
       <span class="fig-n pos">0.000</span>
@@ -774,13 +774,12 @@ Les petites entités sont assujetties, sauf option, au Système minimal…</code
           </tr>
         </thead>
         <tbody>
-          <tr><td>BM25 only</td><td class="n">0.382</td><td class="n">0.637</td><td class="n">0.550</td><td class="n">0.544</td><td class="n">5 ms</td></tr>
-          <tr><td>dense + BM25 (RRF)</td><td class="n">0.431</td><td class="n">0.716</td><td class="n">0.611</td><td class="n">0.612</td><td class="n">26 ms</td></tr>
-          <tr><td>dense — frozen baseline</td><td class="n">0.490</td><td class="n">0.735</td><td class="n">0.647</td><td class="n">0.647</td><td class="n">19 ms</td></tr>
-          <tr><td>dense + BM25 + rerank, pool 50</td><td class="n">0.608</td><td class="n">0.804</td><td class="n">0.755</td><td class="n">0.742</td><td class="n">1592 ms</td></tr>
-          <tr><td>dense + BM25 + rerank, pool 20</td><td class="n">0.598</td><td class="n">0.824</td><td class="n">0.739</td><td class="n">0.742</td><td class="n">636 ms</td></tr>
-          <tr><td>dense + rerank, pool 20</td><td class="n">0.598</td><td class="n">0.824</td><td class="n">0.740</td><td class="n">0.744</td><td class="n">530 ms</td></tr>
-          <tr class="best"><td>dense + rerank, fp16, 512 tok</td><td class="n">0.647</td><td class="n">0.824</td><td class="n">0.776</td><td class="n">0.766</td><td class="n">193 ms</td></tr>
+          <tr><td>BM25 only</td><td class="n">0.381</td><td class="n">0.637</td><td class="n">0.576</td><td class="n">0.551</td><td class="n">5 ms</td></tr>
+          <tr><td>dense + BM25 (RRF)</td><td class="n">0.417</td><td class="n">0.708</td><td class="n">0.625</td><td class="n">0.611</td><td class="n">26 ms</td></tr>
+          <tr><td>dense — frozen baseline</td><td class="n">0.461</td><td class="n">0.735</td><td class="n">0.652</td><td class="n">0.641</td><td class="n">17 ms</td></tr>
+          <tr><td>dense + BM25 + rerank, pool 50</td><td class="n">0.622</td><td class="n">0.815</td><td class="n win">0.800</td><td class="n">0.763</td><td class="n">461 ms</td></tr>
+          <tr><td>dense + BM25 + rerank, pool 20</td><td class="n">0.613</td><td class="n win">0.824</td><td class="n">0.786</td><td class="n">0.760</td><td class="n">235 ms</td></tr>
+          <tr class="best"><td>dense + rerank, fp16, 512 tok</td><td class="n">0.631</td><td class="n">0.815</td><td class="n">0.796</td><td class="n">0.765</td><td class="n">205 ms</td></tr>
         </tbody>
         <caption>
           Best system in the final row: +8.9 points of recall@5 over the frozen
@@ -810,9 +809,14 @@ Les petites entités sont assujetties, sauf option, au Système minimal…</code
         a loss.
       </li>
       <li>
-        <strong>Under reranking</strong>, it contributes <em>nothing
-        measurable</em>: identical recall@5, MRR within 0.001, nDCG within 0.002 —
-        for about 100 ms per query.
+        <strong>Under reranking</strong>, it was written up as contributing
+        <em>nothing measurable</em>. That was true on a gold set whose
+        <code>cross_act</code> category was four questions and never moved.
+        Rebuilt to nine, BM25's effect appears — and in exactly one place:
+        <strong>cross_act recall@5 +0.056, and 0.000 on lookup, multi_hop and
+        temporal alike.</strong> Half a question, bought with recall@1, MRR and
+        30 ms; BM25 is still not shipped. But the original claim was stronger
+        than its evidence, and the category was too small to have supported it.
       </li>
     </ul>
     <p>
