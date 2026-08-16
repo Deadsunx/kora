@@ -1,0 +1,22 @@
+# The reranker as originally configured: fp32, no length cap.
+#
+# Kept as an explicit experiment rather than deleted, because "we made it 4x
+# faster" is only a claim if the slow version is still runnable. This reproduces
+# the Phase 3 rerank numbers under the new config schema, so the speedup is
+# measured against something rather than remembered.
+
+extends: ../base.yaml
+
+name: rerank-fp32-8192
+description: Dense + reranking, full precision and no length cap. The slow reference.
+
+retrieval:
+  bm25: false
+  top_k: 20
+  final_k: 5
+
+reranker:
+  enabled: true
+  batch_size: 16
+  max_length: 8192
+  precision: fp32

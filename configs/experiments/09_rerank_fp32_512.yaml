@@ -1,0 +1,23 @@
+# Isolates truncation from precision: fp32, 512-token cap.
+#
+# If accuracy at rank 1 improves here and not in 08, truncation is doing the
+# work -- capping at 512 tokens would then be acting as a relevance prior,
+# keeping the reranker on an article's operative opening rather than diluting
+# attention across long enumerations. That would be a finding, not an
+# optimisation.
+
+extends: ../base.yaml
+
+name: rerank-fp32-512
+description: Dense + reranking, full precision, 512-token cap.
+
+retrieval:
+  bm25: false
+  top_k: 20
+  final_k: 5
+
+reranker:
+  enabled: true
+  batch_size: 32
+  max_length: 512
+  precision: fp32

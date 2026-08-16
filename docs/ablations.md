@@ -16,10 +16,14 @@ one question at a time, because that is what a user waits for.
 | 3 | **dense** (baseline) | 0.490 | 0.735 | 0.873 | 0.647 | 0.647 | 19 ms |
 | 4 | dense + BM25 + rerank, pool 50 | **0.608** | 0.804 | **0.931** | **0.755** | 0.742 | 1592 ms |
 | 5 | dense + BM25 + rerank, pool 20 | 0.598 | **0.824** | 0.902 | 0.739 | 0.742 | 636 ms |
-| 6 | **dense + rerank, pool 20** | 0.598 | **0.824** | 0.873 | 0.740 | **0.744** | **530 ms** |
+| 6 | dense + rerank, pool 20 | 0.598 | **0.824** | 0.873 | 0.740 | 0.744 | 530 ms |
+| 7 | **dense + rerank, fp16, 512 tokens** | **0.647** | **0.824** | 0.873 | **0.776** | **0.766** | **193 ms** |
 
-**Best system: row 6.** recall@5 0.824 against the baseline's 0.735 — **+8.9
-points, +12% relative** — for 28× the latency.
+**Best system: row 7.** recall@5 0.824 against the baseline's 0.735 — **+8.9
+points, +12% relative** — for 10× the latency, at 193 ms median and 247 ms p90.
+
+Rows 6 and 7 differ only in reranker precision and passage truncation; see
+"Making reranking fast" below, where those two changes are separated.
 
 ## Three findings, two of them negative
 
@@ -71,15 +75,54 @@ confounded "add a cross-encoder" with "widen the pool". Configs 04 and 05 exist
 because that confound was spotted while reading the table, not because it was
 planned.
 
-### 3. Reranking is the only component that earns its cost — and the cost is severe
+### 3. Reranking is the only component that earns its cost
 
-+8.9 points of recall@5 and +9.3 of MRR is a large gain, and reranking is the
-only change here that produced one. But 530 ms median and 1.7 s at p90 is not an
-interactive latency, and this is a 3,000-document corpus on a dedicated GPU.
++8.9 points of recall@5 is a large gain, and reranking is the only change here
+that produced one. As first configured it cost 538 ms median and 1.7 s at p90,
+which is not an interactive latency on a 3,000-document corpus with a dedicated
+GPU. That has since been fixed — see below.
 
-The honest reading is that the accuracy is real and the current implementation
-is not yet shippable. Options not yet tested: a smaller cross-encoder, ONNX or
-quantised inference, or reranking only when the dense scores are close.
+## Making reranking fast
+
+Profiling first, rather than guessing: **reranking was 97.7% of end-to-end
+latency** (encode 15 ms, search 0.8 ms, rerank 486 ms median / 1771 ms p90). Two
+causes, both configuration rather than model choice:
+
+- the cross-encoder loaded in **fp32**, on a GPU built for half precision
+- **`max_length` defaulted to 8192**. Attention is quadratic, so one long
+  article dominated whatever batch it landed in — measured at 2,622 tokens →
+  389 ms against 4,514 tokens → 1,771 ms. **1.7× the tokens, 4.5× the time.**
+
+Both were changed at once and the result was faster *and* more accurate, which
+is exactly the shape of a confounded result, so it was split into a 2×2:
+
+| max_length | precision | recall@1 | recall@5 | MRR | nDCG@5 | median | p90 |
+|---:|---|---:|---:|---:|---:|---:|---:|
+| 8192 | fp32 | 0.598 | 0.824 | 0.740 | 0.744 | 538 ms | 1673 ms |
+| 8192 | fp16 | 0.598 | 0.824 | 0.740 | 0.744 | 200 ms | 599 ms |
+| 512 | fp32 | **0.647** | 0.824 | **0.776** | **0.766** | 624 ms | 794 ms |
+| **512** | **fp16** | **0.647** | 0.824 | **0.776** | **0.766** | **193 ms** | **247 ms** |
+
+The separation is complete:
+
+**fp16 costs no accuracy at all** — identical to three decimals in both length
+settings. A 2.7× speedup for nothing. Ranking is an ordering problem, and score
+gaps here are far larger than fp16 error.
+
+**Truncation is responsible for the entire accuracy gain**: +4.9 points of
+recall@1 and +3.6 of MRR, in both precisions. This is a finding rather than an
+optimisation. An article's operative statement sits at its opening, and long
+enumerations — article 13's list of statutory mentions, article 51's six
+categories of insaisissable goods — dilute the relevance signal across text that
+does not bear on the question. Capping at 512 tokens acts as a prior about where
+legal meaning lives.
+
+Combined: **2.8× faster median, 6.8× faster p90**, and better ranking. The
+gap over the dense baseline falls from 28× latency to 10×.
+
+Had the two changes not been separated, this would have been written up as "we
+made reranking fast and it happened to help", and the more interesting half
+would have been invisible.
 
 ## By question kind, best system (row 6)
 

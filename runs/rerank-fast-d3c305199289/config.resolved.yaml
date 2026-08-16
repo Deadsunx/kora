@@ -1,0 +1,43 @@
+chunking:
+  max_tokens: 512
+  min_tokens: 32
+  overlap_tokens: 64
+  strategy: structural
+description: Dense + reranking at fp16 with a 512-token cap.
+embedding:
+  batch_size: 32
+  device: auto
+  model_name: intfloat/multilingual-e5-base
+  normalize: true
+  passage_prefix: 'passage: '
+  query_prefix: 'query: '
+eval:
+  dataset_path: data/eval/gold_qa.jsonl
+  judge_model: null
+  recall_at_k:
+  - 1
+  - 3
+  - 5
+  - 10
+  - 20
+  seed: 42
+generator:
+  adapter_path: null
+  allow_abstention: true
+  max_new_tokens: 512
+  model_name: Qwen/Qwen3-4B-Instruct
+  quantization: 4bit
+  temperature: 0.0
+name: rerank-fast
+reranker:
+  batch_size: 32
+  enabled: true
+  max_length: 512
+  model_name: BAAI/bge-reranker-v2-m3
+  precision: fp16
+retrieval:
+  bm25: false
+  dense: true
+  final_k: 5
+  rrf_k: 60
+  top_k: 20

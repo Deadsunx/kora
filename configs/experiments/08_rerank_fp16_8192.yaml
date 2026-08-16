@@ -1,0 +1,27 @@
+# Isolates precision from truncation: fp16, no length cap.
+#
+# 07_rerank_fast changed both at once and came out faster *and* more accurate at
+# rank 1. Two changes, one result, no attribution -- the same mistake caught in
+# the Phase 3 pool-width confound, so it gets the same treatment.
+#
+# Together with 09 this completes a 2x2:
+#
+#              8192 tokens        512 tokens
+#   fp32       06 (reference)     09
+#   fp16       08 (this)          07
+
+extends: ../base.yaml
+
+name: rerank-fp16-8192
+description: Dense + reranking, half precision, no length cap.
+
+retrieval:
+  bm25: false
+  top_k: 20
+  final_k: 5
+
+reranker:
+  enabled: true
+  batch_size: 32
+  max_length: 8192
+  precision: fp16

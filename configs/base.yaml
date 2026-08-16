@@ -33,7 +33,12 @@ retrieval:
 reranker:
   enabled: false
   model_name: BAAI/bge-reranker-v2-m3
-  batch_size: 16
+  batch_size: 32
+  # The model advertises 8192 tokens. Leaving it there made reranking 97.7% of
+  # end-to-end latency, with a p90 four times the median, because attention is
+  # quadratic and one long article dominates its batch.
+  max_length: 512
+  precision: fp16
 
 generator:
   model_name: Qwen/Qwen3-4B-Instruct

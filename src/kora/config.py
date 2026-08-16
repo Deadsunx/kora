@@ -100,7 +100,25 @@ class RerankerConfig(_Base):
 
     enabled: bool = False
     model_name: str = "BAAI/bge-reranker-v2-m3"
-    batch_size: int = Field(16, gt=0)
+    batch_size: int = Field(32, gt=0)
+
+    # Cap on tokens per (query, passage) pair.
+    #
+    # This model advertises 8192, and leaving it there is what made reranking
+    # 97.7% of end-to-end latency with a p90 four times its median. Attention is
+    # quadratic, so a single long article dominates the batch it lands in --
+    # measured at 1.7x the tokens costing 4.5x the time.
+    #
+    # 512 is a hypothesis, not a default to trust: it assumes a relevance
+    # judgement is decided by the opening of an article rather than its tail.
+    # The ablation tests it against recall.
+    max_length: int = Field(512, gt=0)
+
+    # Inference precision. The model loads in fp32, which wastes the Ada tensor
+    # cores this project runs on. Ranking is an ordering problem and far less
+    # sensitive to precision than generation, but "far less" is not "not at
+    # all", so it is measured rather than assumed.
+    precision: Literal["fp32", "fp16"] = "fp16"
 
 
 class GeneratorConfig(_Base):

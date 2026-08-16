@@ -56,12 +56,31 @@ class RerankingRetriever:
             from sentence_transformers import CrossEncoder
 
             device = _resolve_device(self.config.embedding.device)
-            log.info(
-                "loading reranker",
-                model=self.config.reranker.model_name,
+            reranker = self.config.reranker
+
+            model = CrossEncoder(
+                reranker.model_name,
                 device=device,
+                max_length=reranker.max_length,
             )
-            self._model = CrossEncoder(self.config.reranker.model_name, device=device)
+
+            if reranker.precision == "fp16":
+                if device == "cuda":
+                    model.model.half()
+                else:
+                    # Half precision on CPU is slower, not faster: there are no
+                    # fp16 kernels for most CPU ops and every one falls back
+                    # through a conversion.
+                    log.warning("fp16 requested on cpu; keeping fp32")
+
+            log.info(
+                "reranker loaded",
+                model=reranker.model_name,
+                device=device,
+                precision=reranker.precision,
+                max_length=reranker.max_length,
+            )
+            self._model = model
         return self._model
 
     def retrieve(self, question: str, k: int) -> list[Hit]:

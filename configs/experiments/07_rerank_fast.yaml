@@ -1,0 +1,27 @@
+# Reranking with the two latency fixes the profile pointed at.
+#
+#   precision  fp32 -> fp16    the model loaded in full precision on a GPU whose
+#                              tensor cores are built for half
+#   max_length 8192 -> 512     attention is quadratic; the uncapped length is
+#                              what made the p90 four times the median
+#
+# Neither touches the model or the pipeline, so any accuracy change is
+# attributable to precision and truncation alone. The gate is recall@5 >= 0.824,
+# the score of the slow version: a speedup that costs accuracy is a different
+# trade, and must be reported as one rather than presented as a free win.
+
+extends: ../base.yaml
+
+name: rerank-fast
+description: Dense + reranking at fp16 with a 512-token cap.
+
+retrieval:
+  bm25: false
+  top_k: 20
+  final_k: 5
+
+reranker:
+  enabled: true
+  batch_size: 32
+  max_length: 512
+  precision: fp16
