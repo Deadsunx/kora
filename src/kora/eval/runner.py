@@ -35,7 +35,8 @@ from kora.eval.metrics import (
 )
 from kora.logging import get_logger
 from kora.paths import run_path
-from kora.retrieval.dense import DenseRetriever, Hit
+from kora.retrieval.dense import Hit
+from kora.retrieval.rerank import Retriever
 
 log = get_logger(__name__)
 
@@ -116,7 +117,9 @@ def _retrieval_metrics(
 def run_retrieval_experiment(
     config: ExperimentConfig,
     gold: GoldSet,
-    retriever: DenseRetriever,
+    retriever: Retriever,
+    *,
+    corpus_size: int,
 ) -> tuple[dict[str, Any], list[QuestionResult]]:
     """Retrieve for every gold question and compute metrics.
 
@@ -127,21 +130,19 @@ def run_retrieval_experiment(
     if not questions:
         raise ValueError("gold set is empty")
 
-    texts = [q.question for q in questions]
-
-    # Encoding is batched, so per-question latency is measured over the search
-    # only and the encode cost is reported separately. Attributing a batched
-    # encode to individual questions would understate real single-query latency.
-    encode_start = time.perf_counter()
-    query_vectors = retriever.encode_queries(texts)
-    encode_ms = (time.perf_counter() - encode_start) * 1000
+    # One question at a time, timing the whole pipeline. Batching the encode and
+    # dividing by batch size understates real latency by an order of magnitude,
+    # and pricing each component honestly is the entire purpose of the table.
+    #
+    # The first question also pays for lazily loading the encoder and reranker,
+    # so it is run once and discarded before timing begins.
+    if questions:
+        retriever.retrieve(questions[0].question, config.retrieval.top_k)
 
     results: list[QuestionResult] = []
-    for index, question in enumerate(questions):
+    for question in questions:
         start = time.perf_counter()
-        hits: list[Hit] = retriever.search_vectors(
-            query_vectors[index : index + 1], config.retrieval.top_k
-        )[0]
+        hits: list[Hit] = retriever.retrieve(question.question, config.retrieval.top_k)
         latency_ms = (time.perf_counter() - start) * 1000
 
         window = hits[: config.retrieval.final_k]
@@ -163,13 +164,15 @@ def run_retrieval_experiment(
     headline_ids = {q.id for q in gold.headline()}
     headline = [r for r in results if r.question_id in headline_ids]
 
+    from kora.retrieval.pipeline import describe
+
     report: dict[str, Any] = {
         "run_id": config.run_id,
         "name": config.name,
+        "pipeline": describe(config),
         "index_fingerprint": config.index_fingerprint(),
-        "corpus_size": len(retriever.index),
+        "corpus_size": corpus_size,
         "gold_composition": gold.composition(),
-        "encode_ms_total": round(encode_ms, 2),
         "headline": _retrieval_metrics(headline, ks, final_k),
         "all_questions": _retrieval_metrics(results, ks, final_k),
         "by_kind": {

@@ -1,0 +1,18 @@
+# Ablation floor: BM25 alone, no dense retrieval at all.
+#
+# Included because the hybrid result cannot be interpreted without it. If hybrid
+# beats dense, that could mean lexical retrieval adds a complementary signal --
+# or simply that lexical retrieval is better on this corpus and dense is holding
+# it back. Only a lexical-only run distinguishes the two.
+#
+# It also prices the semantic component honestly: whatever dense scores above
+# this line is what the embedding model is actually buying.
+
+extends: ../base.yaml
+
+name: lexical-only
+description: BM25 with French tokenisation, no dense retrieval.
+
+retrieval:
+  dense: false
+  bm25: true

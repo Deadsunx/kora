@@ -1,0 +1,22 @@
+# Does BM25 still contribute once a reranker is present?
+#
+# Both rerank runs so far include lexical retrieval, so their gain over dense
+# cannot be attributed. Hybrid alone was *worse* than dense at recall@5 (0.716
+# against 0.735), which raises a real possibility: the cross-encoder may be
+# doing all the work, and BM25 may be adding latency for nothing.
+#
+# Comparing this against 04_rerank_k20 answers it, since the two differ in
+# exactly one flag.
+
+extends: ../base.yaml
+
+name: dense-rerank-k20
+description: Dense retrieval + cross-encoder reranking, no BM25.
+
+retrieval:
+  bm25: false
+  top_k: 20
+  final_k: 5
+
+reranker:
+  enabled: true

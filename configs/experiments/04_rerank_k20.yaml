@@ -1,0 +1,27 @@
+# Isolates reranking from candidate-pool width.
+#
+# 03_hybrid_rerank widens the pool to 50 candidates *and* adds the cross-encoder,
+# so its gain over hybrid confounds two changes. This config reranks the same
+# 20-candidate pool every other experiment uses, which makes the difference
+# attributable:
+#
+#   hybrid            (k=20, no rerank)  -> baseline for this comparison
+#   this              (k=20, rerank)     -> what reranking alone buys
+#   03_hybrid_rerank  (k=50, rerank)     -> what widening the pool adds on top
+#
+# Building the comparison this way was not the original plan; the confound was
+# noticed when reading the first results table, which is the argument for
+# reporting latency and configuration alongside every number.
+
+extends: ../base.yaml
+
+name: rerank-k20
+description: Dense + BM25 + cross-encoder reranking over the standard 20-candidate pool.
+
+retrieval:
+  bm25: true
+  top_k: 20
+  final_k: 5
+
+reranker:
+  enabled: true

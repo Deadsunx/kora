@@ -128,3 +128,13 @@ class DenseRetriever:
         """Retrieve for a batch of questions."""
         k = k if k is not None else self.config.retrieval.top_k
         return self.search_vectors(self.encode_queries(questions), k)
+
+    def retrieve(self, question: str, k: int) -> list[Hit]:
+        """Retrieve for one question, encoding included.
+
+        The single-question path exists so the experiment runner can time what
+        a user actually waits for. Timing a batched encode and dividing by the
+        batch size understates real latency by an order of magnitude, and the
+        whole point of the ablation table is to price each component honestly.
+        """
+        return self.search_vectors(self.encode_queries([question]), k)[0]

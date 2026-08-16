@@ -707,8 +707,8 @@ def eval_run(
     """
     from kora.eval.dataset import load_gold_set
     from kora.eval.runner import run_retrieval_experiment, write_run
-    from kora.retrieval.dense import DenseRetriever
     from kora.retrieval.index import index_exists, load_index
+    from kora.retrieval.pipeline import build_retriever, describe
 
     cfg = load_config(config)
     if not index_exists(cfg):
@@ -720,12 +720,12 @@ def eval_run(
 
     gold = load_gold_set(gold_path)
     index, articles = load_index(cfg)
-    retriever = DenseRetriever(cfg, index, articles)
+    retriever = build_retriever(cfg, index, articles)
 
-    report, results = run_retrieval_experiment(cfg, gold, retriever)
+    report, results = run_retrieval_experiment(cfg, gold, retriever, corpus_size=len(articles))
     destination = write_run(cfg, report, results)
 
-    console.print(f"\n[bold]{cfg.name}[/]  [dim]{cfg.run_id}[/]")
+    console.print(f"\n[bold]{cfg.name}[/]  [dim]{cfg.run_id}[/]  [cyan]{describe(cfg)}[/]")
 
     table = Table(title="Retrieval metrics")
     table.add_column("metric", style="bold")
