@@ -700,6 +700,11 @@ def eval_run(
     gold_path: Path = typer.Option(paths.EVAL_DIR / "gold_qa.jsonl", "--gold"),
     generate: bool = typer.Option(False, "--generate", help="Also generate and score answers."),
     limit: int = typer.Option(0, "--limit", help="Only the first N questions (smoke tests)."),
+    tag: str = typer.Option(
+        "",
+        "--tag",
+        help="Suffix for the run directory. Required when the gold set has changed.",
+    ),
 ) -> None:
     """Run one retrieval experiment and write its results.
 
@@ -749,7 +754,17 @@ def eval_run(
     # A limited run evaluates a different thing from the full sweep, so it must
     # not land on the full sweep's results. The config hash cannot express this:
     # it describes the system, not how much of the gold set was used.
-    destination = write_run(cfg, report, results, suffix=f"-limit{limit}" if limit else "")
+    #
+    # `--tag` covers the same hazard from the other direction. The run id is a
+    # hash of the *config*, so re-running an old config against a grown gold set
+    # produces the same directory name and silently overwrites numbers that
+    # documents already cite. The evaluation data is part of what produced a
+    # result and is not part of the identity; until it is, saying so explicitly
+    # is the honest workaround. See docs/reproducibility.md.
+    suffix = f"-limit{limit}" if limit else ""
+    if tag:
+        suffix += f"-{tag}"
+    destination = write_run(cfg, report, results, suffix=suffix)
 
     console.print(f"\n[bold]{cfg.name}[/]  [dim]{cfg.run_id}[/]  [cyan]{describe(cfg)}[/]")
 

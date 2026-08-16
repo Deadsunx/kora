@@ -95,6 +95,25 @@ So the decision is: **do not renumber.** Instead,
 3. **This document exists**, because a broken guarantee that is written down is
    a different thing from one that is not.
 
+## A second hole, found the same way
+
+The run id hashes the **config**. It does not cover the **gold set**. So
+re-running an unchanged config against a grown evaluation set produces the same
+directory name and silently overwrites numbers that documents already cite —
+which is exactly what would have happened when `cross_act` was rebuilt from 4
+questions to 11, to `rerank-fast-54cefb1da669`, a run pinned by a test and
+quoted throughout these documents.
+
+The evaluation data is part of what produced a result and should be part of its
+identity. Until it is, `kora eval run --tag <name>` suffixes the run directory,
+and the gold composition is already recorded inside every `metrics.json`, so a
+results file read on its own still says how many questions of which kind stand
+behind it.
+
+That is a workaround, not a fix. The fix is to fold a hash of the gold set into
+the run id — which, like `exclude_defaults`, would rename existing runs, and is
+recorded here as the right design rather than performed as a rename.
+
 ## What this is an instance of
 
 The fourth time in this project that the measurement infrastructure was wrong

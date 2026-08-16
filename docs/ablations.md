@@ -139,8 +139,56 @@ The cross_act row moved not at all across all six systems — 0.375, 0.250, 0.37
 0.375, 0.375, 0.375. With four questions each worth 0.25, this is a count, not a
 measurement, and no conclusion should be drawn from it. The category was cut
 from eight to four during gold-set validation because most of its questions were
-not genuinely cross-act; rebuilding it from inter-act textual cross-references
-is the way to make it measurable.
+not genuinely cross-act.
+
+**This has since been rebuilt from inter-act textual cross-references** — see
+"Making cross_act measurable" below. The numbers in the table above are
+unchanged, because they are the headline over validated questions and the new
+questions are not yet validated.
+
+## Making cross_act measurable
+
+The category was rebuilt the way it should have been built: from the text rather
+than from topic. The corpus was mined for articles that **name another acte
+uniforme**, which found **52 bridges across 21 act pairs**. Seven of those became
+questions, three of them resting on article-level pointers where the source
+article names the exact target article:
+
+| bridge | question |
+|---|---|
+| AUDCG art 40 → *article 51 AUS* | who may request a sûreté inscription, on what form |
+| AUPSRVE art 245-2 → *article 136 AUDCG* | what a saisie of a fonds de commerce covers |
+| AUDCIF art 102 → *article 849 AUSCGIE* | who publishes a half-year activity statement, and what it contains |
+| AUSCGIE art 149 → AUA | which text governs arbitration between shareholders |
+| AUSCOOP art 118 → AUA | may a cooperative create its own arbitration organ |
+| AUS art 137 → AUPSRVE saisie-attribution | how a pledged bank balance is determined |
+| AUS art 142 → AUPSRVE saisie conservatoire | what governs judicial pledge of shares |
+
+`cross_act` goes from 4 questions to 11, each worth 0.09 rather than 0.25.
+
+**The row now moves**, measured over all questions:
+
+| system | cross_act recall@5 | MRR |
+|---|---:|---:|
+| BM25 only | 0.455 | 0.642 |
+| dense baseline | 0.500 | 0.506 |
+| dense + rerank, fp16, 512 | **0.545** | **0.804** |
+
+And it has the right difficulty profile. On the best system, **all seven new
+questions retrieve their first gold article at rank 1** — the question's own
+vocabulary finds the anchor immediately — while **five of the seven retrieve
+only one of two.** The article that *mentions* the other act is easy; the
+article *in* the other act is not. That is precisely the thing a cross-act
+question should be testing, and it is why recall@5 and MRR now say different
+things: MRR reports that the anchor is easy, recall that the bridge is hard.
+
+One incidental result the larger category exposed: **cross_act is the only kind
+where BM25 beats dense on a metric** — MRR 0.642 against 0.506. These questions
+carry distinctive terms of art and explicit article references, which is exactly
+the mechanism the refuted Phase 3 hypothesis proposed. It was invisible while the
+category had four questions. It does not revive the hypothesis — BM25 is still
+worse at recall@5 here and worse everywhere else — but it locates the one place
+the reasoning behind it was pointing.
 
 ## What these numbers do not cover
 

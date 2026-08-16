@@ -64,9 +64,21 @@ needed. If one article alone answers the question, the second is padding and
 recall will be understated for every system. Ask: *remove either article — is
 the answer still complete?* If yes, the question is a lookup wearing a costume.
 
-**`cross_act`** (8) — same test, plus: do the articles really come from
+**`cross_act`** (11) — same test, plus: do the articles really come from
 different acts, and does the question genuinely require both? These are the
 hardest to get right and the most valuable when correct.
+
+Seven of the eleven were built from a **textual bridge** and carry it in their
+`note`: an article in act A that names act B, or names an exact article of act B.
+Checking one of those means checking the bridge as well as the answer — does the
+source article really contain that reference, and does the target really supply
+the half the source only points at? A bridge that turns out to be decorative
+makes the question a `multi_hop` in a costume, which is how the category came to
+be cut from eight to four in the first place.
+
+The mining is reproducible: search article bodies for `Acte uniforme` followed
+by another act's title. That found 52 bridges across 21 act pairs, of which
+7 became questions, so there is room to grow the category further.
 
 **`temporal`** (2 remaining: q050, q051) — check that the gold article actually
 states the abrogation or transitional rule, not merely something nearby. Both
