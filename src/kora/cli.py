@@ -655,6 +655,129 @@ def eval_promote(
     console.print(f"headline-eligible: {len(reloaded.headline())} / {len(reloaded)}")
 
 
+index_app = typer.Typer(help="Build and inspect the retrieval index.", no_args_is_help=True)
+app.add_typer(index_app, name="index")
+
+
+@index_app.command("build")
+def index_build(
+    config: Path = typer.Option(..., "--config", "-c", exists=True, help="YAML config."),
+    force: bool = typer.Option(False, "--force", help="Rebuild even if present."),
+) -> None:
+    """Encode the corpus and store the index under its fingerprint."""
+    from kora.retrieval.index import build_index, index_dir, index_exists, load_articles
+
+    cfg = load_config(config)
+
+    if index_exists(cfg) and not force:
+        console.print(
+            f"[green]Index already present[/] for fingerprint "
+            f"[bold]{cfg.index_fingerprint()}[/]\n  {index_dir(cfg)}\n"
+            "[dim]Another experiment already built it. Use --force to rebuild.[/]"
+        )
+        return
+
+    articles = load_articles()
+    if not articles:
+        console.print("[red]No parsed articles. Run `kora corpus parse` first.[/]")
+        raise typer.Exit(1)
+
+    repealed = sum(1 for a in articles if a.repealed or a.status == "superseded")
+    console.print(
+        f"Indexing [bold]{len(articles)}[/] articles "
+        f"([yellow]{repealed}[/] repealed, kept deliberately as distractors)\n"
+        f"model: [bold]{cfg.embedding.model_name}[/]"
+    )
+
+    index = build_index(cfg, articles)
+    console.print(f"\n[green]Built[/] {len(index)} vectors, dim {index.dim}\n  {index_dir(cfg)}")
+
+
+@eval_app.command("run")
+def eval_run(
+    config: Path = typer.Option(..., "--config", "-c", exists=True, help="YAML config."),
+    gold_path: Path = typer.Option(paths.EVAL_DIR / "gold_qa.jsonl", "--gold"),
+) -> None:
+    """Run one retrieval experiment and write its results.
+
+    Metrics are reported twice: over validated questions (the headline) and over
+    all questions (diagnostic). Only the first may be quoted, and both are
+    printed with their sample size, because a recall figure without an n behind
+    it is not a result.
+    """
+    from kora.eval.dataset import load_gold_set
+    from kora.eval.runner import run_retrieval_experiment, write_run
+    from kora.retrieval.dense import DenseRetriever
+    from kora.retrieval.index import index_exists, load_index
+
+    cfg = load_config(config)
+    if not index_exists(cfg):
+        console.print(
+            f"[red]No index for fingerprint {cfg.index_fingerprint()}.[/]\n"
+            f"Run: kora index build --config {config}"
+        )
+        raise typer.Exit(1)
+
+    gold = load_gold_set(gold_path)
+    index, articles = load_index(cfg)
+    retriever = DenseRetriever(cfg, index, articles)
+
+    report, results = run_retrieval_experiment(cfg, gold, retriever)
+    destination = write_run(cfg, report, results)
+
+    console.print(f"\n[bold]{cfg.name}[/]  [dim]{cfg.run_id}[/]")
+
+    table = Table(title="Retrieval metrics")
+    table.add_column("metric", style="bold")
+    table.add_column("validated", justify="right")
+    table.add_column("all questions", justify="right")
+
+    headline, everything = report["headline"], report["all_questions"]
+    keys = [k for k in everything if k != "n"]
+    table.add_row(
+        "[dim]n[/]",
+        f"[dim]{int(headline.get('n', 0))}[/]",
+        f"[dim]{int(everything.get('n', 0))}[/]",
+    )
+
+    def fmt(value: float, metric: str) -> str:
+        # Exact search over 3k vectors is sub-millisecond, so whole milliseconds
+        # round to zero and report nothing. Latency still belongs in the table:
+        # it is the denominator for every accuracy gain Phase 3 buys.
+        return f"{value:.3f}" if "latency" not in metric else f"{value:.3f} ms"
+
+    for key in keys:
+        left = headline.get(key)
+        table.add_row(
+            key,
+            fmt(left, key) if left is not None else "[dim]--[/]",
+            fmt(everything[key], key),
+        )
+    console.print(table)
+
+    if report["by_kind"]:
+        by_kind = Table(title=f"recall@{cfg.retrieval.final_k} by question kind (all questions)")
+        by_kind.add_column("kind", style="bold")
+        by_kind.add_column("n", justify="right")
+        by_kind.add_column(f"recall@{cfg.retrieval.final_k}", justify="right")
+        by_kind.add_column("mrr", justify="right")
+        for kind, metrics in report["by_kind"].items():
+            if not metrics:
+                by_kind.add_row(kind, "0", "[dim]n/a[/]", "[dim]n/a[/]")
+                continue
+            by_kind.add_row(
+                kind,
+                str(int(metrics["n"])),
+                f"{metrics[f'recall@{cfg.retrieval.final_k}']:.3f}",
+                f"{metrics['mrr']:.3f}",
+            )
+        console.print(by_kind)
+
+    if "warning" in report:
+        console.print(f"\n[yellow]{report['warning']}[/]")
+    console.print(f"\nWritten to [dim]{destination}[/]")
+
+
 def load_manifest_or_exit():
     """Load the manifest, turning validation errors into a readable message."""
     from pydantic import ValidationError
