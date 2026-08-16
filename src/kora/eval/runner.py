@@ -57,8 +57,16 @@ class QuestionResult:
     # is the leading indicator for the citation-safety metric downstream.
     unsafe_retrieved: list[str] = field(default_factory=list)
 
+    # Populated only when generation is enabled.
+    answer: str | None = None
+    cited: list[str] = field(default_factory=list)
+    cited_repealed: list[str] = field(default_factory=list)
+    cited_not_retrieved: list[str] = field(default_factory=list)
+    abstained: bool | None = None
+    answer_latency_ms: float | None = None
+
     def to_json(self) -> dict[str, Any]:
-        return {
+        payload: dict[str, Any] = {
             "question_id": self.question_id,
             "kind": self.kind,
             "provenance": self.provenance,
@@ -68,6 +76,16 @@ class QuestionResult:
             "unsafe_retrieved": self.unsafe_retrieved,
             "latency_ms": round(self.latency_ms, 2),
         }
+        if self.answer is not None:
+            payload |= {
+                "answer": self.answer,
+                "cited": self.cited,
+                "cited_repealed": self.cited_repealed,
+                "cited_not_retrieved": self.cited_not_retrieved,
+                "abstained": self.abstained,
+                "answer_latency_ms": round(self.answer_latency_ms or 0.0, 2),
+            }
+        return payload
 
 
 def _retrieval_metrics(
@@ -114,12 +132,62 @@ def _retrieval_metrics(
     return metrics
 
 
+def _answer_metrics(results: list[QuestionResult]) -> dict[str, float]:
+    """Metrics over generated answers.
+
+    Reported separately from retrieval because they measure a different system:
+    perfect retrieval followed by a fabricated answer scores well above and
+    badly below, and averaging the two would hide it.
+    """
+    from kora.eval.metrics import abstention_scores, citation_precision
+
+    answered = [r for r in results if r.answer is not None]
+    if not answered:
+        return {}
+
+    metrics: dict[str, float] = {"n": float(len(answered))}
+
+    scores = abstention_scores(
+        abstained=[bool(r.abstained) for r in answered],
+        answerable=[bool(r.gold) for r in answered],
+    )
+    metrics |= scores
+
+    # Citation quality is scored only where the system chose to answer and the
+    # question has a gold answer. Scoring an abstention's citations would
+    # measure nothing, since a correct abstention cites nothing by design.
+    citing = [r for r in answered if r.gold and not r.abstained]
+    if citing:
+        metrics["citation_precision"] = sum(
+            citation_precision(r.cited, r.gold) for r in citing
+        ) / len(citing)
+        metrics["answers_with_no_citation"] = sum(1 for r in citing if not r.cited) / len(citing)
+
+        # Citing an article that was never retrieved means the model produced it
+        # from parametric memory rather than the provided context. In a
+        # grounded system that is fabrication, even when the article is real.
+        metrics["answers_citing_unretrieved"] = sum(
+            1 for r in citing if r.cited_not_retrieved
+        ) / len(citing)
+
+        # The metric the corpus exists to support.
+        metrics["answers_citing_repealed"] = sum(1 for r in citing if r.cited_repealed) / len(
+            citing
+        )
+
+    latencies = sorted(r.answer_latency_ms or 0.0 for r in answered)
+    metrics["answer_latency_ms_median"] = latencies[len(latencies) // 2]
+    metrics["answer_latency_ms_p90"] = latencies[int(len(latencies) * 0.9)]
+    return metrics
+
+
 def run_retrieval_experiment(
     config: ExperimentConfig,
     gold: GoldSet,
     retriever: Retriever,
     *,
     corpus_size: int,
+    generator: Any | None = None,
 ) -> tuple[dict[str, Any], list[QuestionResult]]:
     """Retrieve for every gold question and compute metrics.
 
@@ -146,18 +214,34 @@ def run_retrieval_experiment(
         latency_ms = (time.perf_counter() - start) * 1000
 
         window = hits[: config.retrieval.final_k]
-        results.append(
-            QuestionResult(
-                question_id=question.id,
-                kind=question.kind,
-                provenance=question.provenance,
-                retrieved=[h.chunk_id for h in hits],
-                scores=[h.score for h in hits],
-                gold=list(question.gold_chunk_ids),
-                latency_ms=latency_ms,
-                unsafe_retrieved=[h.chunk_id for h in window if h.is_unsafe_to_cite],
-            )
+        result = QuestionResult(
+            question_id=question.id,
+            kind=question.kind,
+            provenance=question.provenance,
+            retrieved=[h.chunk_id for h in hits],
+            scores=[h.score for h in hits],
+            gold=list(question.gold_chunk_ids),
+            latency_ms=latency_ms,
+            unsafe_retrieved=[h.chunk_id for h in window if h.is_unsafe_to_cite],
         )
+
+        if generator is not None:
+            start = time.perf_counter()
+            generated = generator.answer(question.question, [h.article for h in window])
+            result.answer_latency_ms = (time.perf_counter() - start) * 1000
+
+            # Statuses come from the articles actually shown, so a citation of a
+            # repealed article is detected even when the model reformatted it.
+            shown = {h.chunk_id: h for h in window}
+            cited = list(generated.cited_chunk_ids)
+
+            result.answer = generated.text
+            result.cited = cited
+            result.abstained = generated.abstained
+            result.cited_not_retrieved = [c for c in cited if c not in shown]
+            result.cited_repealed = [c for c in cited if c in shown and shown[c].is_unsafe_to_cite]
+
+        results.append(result)
 
     ks = tuple(config.eval.recall_at_k)
     final_k = config.retrieval.final_k
@@ -180,6 +264,10 @@ def run_retrieval_experiment(
             for kind in sorted({r.kind for r in results})
         },
     }
+
+    if generator is not None:
+        report["answers"] = _answer_metrics(results)
+        report["answers_headline"] = _answer_metrics(headline)
 
     if not headline:
         report["warning"] = (

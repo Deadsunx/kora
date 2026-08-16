@@ -697,6 +697,8 @@ def index_build(
 def eval_run(
     config: Path = typer.Option(..., "--config", "-c", exists=True, help="YAML config."),
     gold_path: Path = typer.Option(paths.EVAL_DIR / "gold_qa.jsonl", "--gold"),
+    generate: bool = typer.Option(False, "--generate", help="Also generate and score answers."),
+    limit: int = typer.Option(0, "--limit", help="Only the first N questions (smoke tests)."),
 ) -> None:
     """Run one retrieval experiment and write its results.
 
@@ -719,10 +721,24 @@ def eval_run(
         raise typer.Exit(1)
 
     gold = load_gold_set(gold_path)
+    if limit:
+        from kora.eval.dataset import GoldSet
+
+        gold = GoldSet(version=gold.version, questions=gold.questions[:limit])
+        console.print(f"[yellow]Limited to the first {len(gold)} questions.[/]")
+
     index, articles = load_index(cfg)
     retriever = build_retriever(cfg, index, articles)
 
-    report, results = run_retrieval_experiment(cfg, gold, retriever, corpus_size=len(articles))
+    generator = None
+    if generate:
+        from kora.generation.generator import Generator
+
+        generator = Generator(cfg)
+
+    report, results = run_retrieval_experiment(
+        cfg, gold, retriever, corpus_size=len(articles), generator=generator
+    )
     destination = write_run(cfg, report, results)
 
     console.print(f"\n[bold]{cfg.name}[/]  [dim]{cfg.run_id}[/]  [cyan]{describe(cfg)}[/]")
@@ -772,6 +788,21 @@ def eval_run(
                 f"{metrics['mrr']:.3f}",
             )
         console.print(by_kind)
+
+    if report.get("answers"):
+        answers = Table(title="Answer metrics")
+        answers.add_column("metric", style="bold")
+        answers.add_column("value", justify="right")
+        for key, value in report["answers"].items():
+            if key == "n":
+                answers.add_row("[dim]n[/]", f"[dim]{int(value)}[/]")
+            elif "latency" in key:
+                answers.add_row(key, f"{value:.0f} ms")
+            elif value != value:  # NaN: the set could not test this
+                answers.add_row(key, "[dim]n/a[/]")
+            else:
+                answers.add_row(key, f"{value:.3f}")
+        console.print(answers)
 
     if "warning" in report:
         console.print(f"\n[yellow]{report['warning']}[/]")

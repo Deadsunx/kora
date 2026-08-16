@@ -128,11 +128,21 @@ class GeneratorConfig(_Base):
     None gives the base model, which is exactly the comparison we need.
     """
 
-    model_name: str = "Qwen/Qwen3-4B-Instruct"
+    # Qwen3-4B-Instruct-2507. The bare "Qwen/Qwen3-4B-Instruct" that sat here
+    # from Phase 0 does not resolve -- nothing caught it because nothing had
+    # tried to load a generator yet. Llama-3.2-3B-Instruct was the other
+    # candidate and is gated, which would have blocked mid-training.
+    model_name: str = "Qwen/Qwen3-4B-Instruct-2507"
     adapter_path: str | None = None
     quantization: Literal["none", "4bit", "8bit"] = "4bit"
     max_new_tokens: int = Field(512, gt=0)
     temperature: float = Field(0.0, ge=0.0, le=2.0)
+
+    # Passages given to the generator, truncated to this many characters each.
+    # Reranking showed that an article's operative statement sits at its opening
+    # and long enumerations dilute relevance; the same is likely true of the
+    # generator's attention, and this makes it testable.
+    max_passage_chars: int = Field(1200, gt=0)
     # Refusing to answer without evidence is a feature in a legal assistant,
     # not a bug. We measure abstention explicitly.
     allow_abstention: bool = True

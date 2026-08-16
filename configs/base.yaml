@@ -41,11 +41,12 @@ reranker:
   precision: fp16
 
 generator:
-  model_name: Qwen/Qwen3-4B-Instruct
+  model_name: Qwen/Qwen3-4B-Instruct-2507
   adapter_path: null
   quantization: 4bit
   max_new_tokens: 512
   temperature: 0.0
+  max_passage_chars: 1200
   allow_abstention: true
 
 eval:
