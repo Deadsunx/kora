@@ -1,0 +1,52 @@
+# Does a self-correction step help, on top of decomposition?
+#
+# Identical to 11_agent_decompose except that after reranking, the model is
+# asked whether the passages suffice; if not, its statement of what is missing
+# becomes a second query and the rankings are fused. One retry, bounded.
+#
+# HYPOTHESIS, recorded before the run.
+#
+# Weaker than the case for decomposition, for a reason Phase 4 already measured:
+# **the model is a poor judge of what it is missing.** Of the two false
+# abstentions in the generation baseline, both were cases where retrieval had
+# not supplied the governing article and the model declined correctly given what
+# it saw. It knew the context was insufficient. What it could not do is say
+# which article would have fixed it -- it had never seen it.
+#
+# That is exactly what this step asks for. The prediction is that verification
+# fires on a minority of questions, that its follow-up queries are plausible
+# legal phrases rather than the missing article, and that fusing their results
+# changes recall very little in either direction.
+#
+# The failure mode to watch for is worse than doing nothing: a confident
+# follow-up query on a question that was already answered correctly can displace
+# a true positive out of the top five. RRF fusion with the original ranking
+# limits the damage but does not prevent it, so a *drop* on lookup would be the
+# signature.
+#
+# Cost: one more generation and one more full rerank per firing question, on top
+# of decomposition's. This is the most expensive configuration in the project.
+
+extends: ../base.yaml
+
+name: agent-verify
+description: Decomposition plus one self-correction retrieval step.
+
+retrieval:
+  bm25: false
+  top_k: 20
+  final_k: 5
+
+reranker:
+  enabled: true
+  batch_size: 32
+  max_length: 512
+  precision: fp16
+
+agent:
+  enabled: true
+  decompose: true
+  max_subquestions: 3
+  keep_original: true
+  verify: true
+  max_steps: 2

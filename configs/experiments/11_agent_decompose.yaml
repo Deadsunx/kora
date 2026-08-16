@@ -1,0 +1,60 @@
+# Does query decomposition help retrieval on this corpus?
+#
+# Identical to 07_rerank_fast except that an LLM splits the question into
+# sub-questions first and the rankings are fused with RRF. Any difference is
+# decomposition and nothing else.
+#
+# HYPOTHESIS, recorded before the run.
+#
+# The headline number is structurally almost incapable of showing this working,
+# and that is the first thing to say. The 51 answerable questions are 33 lookups,
+# 9 multi_hop, 5 temporal and 4 cross_act. Decomposition can only help questions
+# that need more than one article:
+#
+#   lookup    33  recall@5 0.879   one article each; nothing to decompose, and
+#                                  splitting one would retrieve noise
+#   multi_hop  9  recall@5 0.722   the target -- the whole mechanism aims here
+#   temporal   5  recall@5 1.000   at ceiling; can only fall
+#   cross_act  4  recall@5 0.375   the natural target, but n=4 is a count
+#
+# So even a large multi_hop gain moves the headline very little: +0.15 on 9 of
+# 51 questions is +0.026 overall, and a small lookup regression cancels it. The
+# prediction is therefore that **the headline barely moves**, and that the
+# result must be read by kind or not at all.
+#
+# On the mechanism itself: the honest prior is scepticism. Phase 3 showed that a
+# wider candidate pool made reranking *worse*, and decomposition works by
+# changing what is in the pool. The fusion keeps the pool at top_k precisely so
+# this is a test of composition rather than of width, but the direction of the
+# Phase 3 result is a warning.
+#
+# The cost is not in doubt. Decomposition is an extra generation before
+# retrieval starts -- one to three seconds against a 193 ms retrieval stage, so
+# roughly a 10-20x latency increase for whatever accuracy it buys.
+#
+# If multi_hop improves and lookup does not regress, the finding is "helps
+# exactly where the mechanism predicts, at a large latency cost, on n=9". That
+# is a modest claim and it is the most this experiment can support.
+
+extends: ../base.yaml
+
+name: agent-decompose
+description: Decomposition + RRF fusion, under the frozen best reranking setup.
+
+retrieval:
+  bm25: false
+  top_k: 20
+  final_k: 5
+
+reranker:
+  enabled: true
+  batch_size: 32
+  max_length: 512
+  precision: fp16
+
+agent:
+  enabled: true
+  decompose: true
+  max_subquestions: 3
+  keep_original: true
+  verify: false

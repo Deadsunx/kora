@@ -66,8 +66,12 @@ class Engine:
 
         self.config = config
         self._index, self._articles = load_index(config)
-        self._retriever = build_retriever(config, self._index, self._articles)
         self._generator = Generator(config)
+        # The same generator instance backs both the agent and the answer, so a
+        # served agentic config loads one model rather than two.
+        self._retriever = build_retriever(
+            config, self._index, self._articles, generator=self._generator
+        )
         self._generator_loaded = False
         # Serialises generation only. See the module docstring.
         self._generation_lock = Lock()

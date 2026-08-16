@@ -108,6 +108,40 @@ class Generator:
         self._model, self._tokenizer = model, tokenizer
         return model, tokenizer
 
+    def chat(self, messages: list[dict[str, str]], *, max_new_tokens: int | None = None) -> str:
+        """Run the model on arbitrary messages and return its reply.
+
+        The agent needs the loaded model for questions that are not "answer
+        this" — decomposing a query, judging whether passages suffice. Exposing
+        `chat` rather than giving the agent its own model instance is not a
+        convenience: a second model would not fit. The embedder, cross-encoder
+        and a 4-bit 4B generator already occupy most of 8 GiB.
+
+        `max_new_tokens` is separate from the generator's because these replies
+        are a line or two, and generation time is linear in output length.
+        """
+        import torch
+
+        model, tokenizer = self._load()
+        prompt = tokenizer.apply_chat_template(
+            messages,
+            tokenize=False,
+            add_generation_prompt=True,
+            enable_thinking=False,
+        )
+        inputs = tokenizer(prompt, return_tensors="pt").to(model.device)
+
+        with torch.inference_mode():
+            output = model.generate(
+                **inputs,
+                max_new_tokens=max_new_tokens or self.config.agent.max_new_tokens,
+                do_sample=False,
+                pad_token_id=tokenizer.pad_token_id,
+            )
+
+        generated = output[0][inputs["input_ids"].shape[1] :]
+        return tokenizer.decode(generated, skip_special_tokens=True).strip()
+
     def _prepare(self, question: str, articles: list[Article]):
         """Tokenise one question into model inputs and decoding settings.
 

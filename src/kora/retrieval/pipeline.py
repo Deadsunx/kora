@@ -21,14 +21,22 @@ log = get_logger(__name__)
 
 
 def describe(config: ExperimentConfig) -> str:
-    """Human-readable summary of the active pipeline, e.g. 'dense + bm25 + rerank'."""
+    """Human-readable summary of the active pipeline, e.g. 'dense + bm25 + rerank'.
+
+    Written in pipeline order, so the string says where the agent stages sit
+    rather than merely that they are on.
+    """
     parts = []
     if config.retrieval.dense:
         parts.append("dense")
     if config.retrieval.bm25:
         parts.append("bm25")
+    if config.agent.enabled and config.agent.decompose:
+        parts.append("decompose")
     if config.reranker.enabled:
         parts.append("rerank")
+    if config.agent.enabled and config.agent.verify:
+        parts.append("verify")
     return " + ".join(parts) or "none"
 
 
@@ -36,10 +44,21 @@ def build_retriever(
     config: ExperimentConfig,
     index: DenseIndex,
     articles: list[Article],
+    generator: object | None = None,
 ) -> Retriever:
-    """Construct the retriever a config asks for."""
+    """Construct the retriever a config asks for.
+
+    `generator` is required only when the config enables the agent, and is
+    passed in rather than constructed here so that one model serves both the
+    agent and the answer. Three models already occupy most of 8 GiB; a fourth
+    is not a design choice, it is an out-of-memory error.
+    """
+    # Validate before building anything. Loading an encoder and then discovering
+    # the config is incoherent wastes a minute and reports the wrong error.
     if not config.retrieval.dense and not config.retrieval.bm25:
         raise ValueError("config enables neither dense nor bm25 retrieval")
+    if config.agent.enabled and generator is None:
+        raise ValueError("agent.enabled requires a generator")
 
     base: Retriever
     if config.retrieval.dense and config.retrieval.bm25:
@@ -57,8 +76,23 @@ def build_retriever(
         # cannot tell you on its own.
         base = _LexicalOnly(BM25Retriever(articles), articles)
 
+    # Order is the design; see kora/agent/retriever.py. Decomposition changes
+    # what the candidate pool contains, so it goes under the reranker.
+    # Verification judges the passages that would actually be shown, so it goes
+    # over it.
+    agent = config.agent
+    if agent.enabled and agent.decompose:
+        from kora.agent.retriever import DecomposingRetriever
+
+        base = DecomposingRetriever(config, base, generator)
+
     if config.reranker.enabled:
         base = RerankingRetriever(config, base)
+
+    if agent.enabled and agent.verify:
+        from kora.agent.retriever import VerifyingRetriever
+
+        base = VerifyingRetriever(config, base, generator)
 
     log.info("retriever built", pipeline=describe(config))
     return base

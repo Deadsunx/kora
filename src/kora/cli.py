@@ -729,13 +729,19 @@ def eval_run(
         console.print(f"[yellow]Limited to the first {len(gold)} questions.[/]")
 
     index, articles = load_index(cfg)
-    retriever = build_retriever(cfg, index, articles)
 
-    generator = None
-    if generate:
+    # One generator, shared. The agent needs a model even when answers are not
+    # being generated -- decomposition is itself a generation -- so it is built
+    # whenever either the agent or `--generate` asks for one, and handed to
+    # both. Two instances would not fit in 8 GiB alongside the encoders.
+    model = None
+    if generate or cfg.agent.enabled:
         from kora.generation.generator import Generator
 
-        generator = Generator(cfg)
+        model = Generator(cfg)
+
+    retriever = build_retriever(cfg, index, articles, generator=model)
+    generator = model if generate else None
 
     report, results = run_retrieval_experiment(
         cfg, gold, retriever, corpus_size=len(articles), generator=generator
