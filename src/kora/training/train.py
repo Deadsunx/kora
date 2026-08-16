@@ -20,18 +20,30 @@ model silently produces nothing useful.
 
 Loss masking
 ------------
-`assistant_only_loss` restricts the loss to assistant turns. Without it the model
-is trained to reproduce the *context* -- five OHADA articles it was given, which
-it should never generate -- and most of the gradient signal goes into memorising
-passages rather than learning the answer contract. This is the single setting
-most likely to be wrong in a chat fine-tune and the least likely to announce
-itself, since training loss looks healthy either way.
+Loss must cover the assistant turn only. Without that the model is trained to
+reproduce the *context* -- five OHADA articles it was given and should never
+generate -- and most of the gradient goes into memorising passages instead of
+learning the answer contract.
+
+The obvious route, `assistant_only_loss=True` on a `messages` dataset, does not
+work with this model and fails silently. It relies on the chat template emitting
+`{% generation %}` markers, and Qwen3's template has none: asking for the
+assistant mask returns **zero** assistant tokens out of 984, with only a warning.
+Training would have proceeded with a healthy-looking loss curve and a broken
+objective.
+
+So the dataset is built in TRL's prompt/completion form instead. The prompt is
+the system and user turns, the completion is the assistant turn, and TRL masks
+the prompt structurally rather than by parsing a rendered string. The property
+is then a fact about the data layout rather than about a template's contents,
+and it is asserted before training starts.
 """
 
 from __future__ import annotations
 
 import json
 from pathlib import Path
+from typing import Any
 
 from kora.logging import get_logger
 from kora.paths import MODELS_DIR
@@ -46,6 +58,49 @@ def _load_examples(path: Path) -> list[dict]:
     return [
         json.loads(line) for line in path.read_text(encoding="utf-8").splitlines() if line.strip()
     ]
+
+
+def _verify_loss_masking(trainer: Any) -> None:
+    """Assert that the prompt is masked and the completion is not.
+
+    Checked against a real collated batch rather than against configuration,
+    because the failure this guards is precisely a setting that is accepted,
+    reported as enabled, and does nothing. An all-masked batch trains on no
+    tokens; an unmasked batch trains the model to emit the retrieved articles.
+    Both produce a plausible loss curve.
+    """
+    batch = next(iter(trainer.get_train_dataloader()))
+    labels = batch["labels"][0]
+
+    masked = int((labels == -100).sum())
+    supervised = int((labels != -100).sum())
+    total = int(labels.numel())
+
+    log.info(
+        "loss masking",
+        masked=masked,
+        supervised=supervised,
+        supervised_fraction=round(supervised / max(total, 1), 3),
+    )
+
+    if supervised == 0:
+        raise RuntimeError(
+            "Loss mask covers every token: nothing would be trained on. "
+            "This is what assistant_only_loss does with a chat template that "
+            "lacks {% generation %} markers."
+        )
+    if masked == 0:
+        raise RuntimeError(
+            "Nothing is masked: the model would be trained to reproduce the "
+            "retrieved articles as well as the answer."
+        )
+    if supervised / total > 0.5:
+        # Prompts here are ~1000 tokens of context and answers are one or two
+        # sentences, so anything above half is a sign the split went wrong.
+        raise RuntimeError(
+            f"{supervised}/{total} tokens supervised. Expected a small fraction; "
+            "the prompt/completion split is probably wrong."
+        )
 
 
 def train(config: TrainingConfig) -> Path:
@@ -66,7 +121,23 @@ def train(config: TrainingConfig) -> Path:
     records = _load_examples(Path(config.dataset_path))
     log.info("training data", examples=len(records), path=config.dataset_path)
 
-    dataset = Dataset.from_list([{"messages": r["messages"]} for r in records])
+    # Prompt/completion rather than a single `messages` field, so TRL masks the
+    # prompt by construction. See the module docstring: assistant_only_loss
+    # silently produces an all-zero mask with this model's chat template.
+    rows = []
+    for record in records:
+        messages = record["messages"]
+        assistant = [m for m in messages if m["role"] == "assistant"]
+        if len(assistant) != 1:
+            raise ValueError(f"expected exactly one assistant turn, got {len(assistant)}")
+        rows.append(
+            {
+                "prompt": [m for m in messages if m["role"] != "assistant"],
+                "completion": assistant,
+            }
+        )
+
+    dataset = Dataset.from_list(rows)
     split = dataset.train_test_split(test_size=config.eval_fraction, seed=config.seed)
 
     tokenizer = AutoTokenizer.from_pretrained(config.base_model)
@@ -130,9 +201,11 @@ def train(config: TrainingConfig) -> Path:
         optim=config.optimizer,
         max_length=config.max_length,
         bf16=True,
-        # Loss on the assistant turn only. See the module docstring: without
-        # this the model is trained to reproduce the retrieved articles.
-        assistant_only_loss=True,
+        # Loss on the completion only. With a prompt/completion dataset TRL
+        # masks the prompt structurally, which is why this replaced
+        # assistant_only_loss -- that path depends on chat-template markers this
+        # model does not have, and fails by masking nothing at all.
+        completion_only_loss=True,
         packing=False,
         logging_steps=10,
         save_strategy="epoch",
@@ -152,6 +225,8 @@ def train(config: TrainingConfig) -> Path:
         peft_config=peft_config,
         processing_class=tokenizer,
     )
+
+    _verify_loss_masking(trainer)
 
     trained_model = trainer.model
     assert trained_model is not None, "SFTTrainer did not build a model"
