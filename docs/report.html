@@ -382,14 +382,14 @@
     <h1>Kora: a measured retrieval system for OHADA business law</h1>
     <p class="standfirst">
       Retrieval-augmented question answering over French-language African business
-      law. Most of its principal findings are negative — and the most useful one
-      was invisible to every metric in the harness.
+      law. Most of its principal findings are negative — and two of them were
+      invisible to every metric in the harness.
     </p>
     <div class="colophon">
       <span><b>3,056</b> articles, 10 acts</span>
       <span><b>59</b> validated questions</span>
-      <span><b>12</b> recorded runs</span>
-      <span><b>202</b> tests</span>
+      <span><b>14</b> recorded runs</span>
+      <span><b>252</b> tests</span>
       <span>one RTX 4070 Laptop, 8&nbsp;GiB</span>
     </div>
   </header>
@@ -434,8 +434,9 @@
       <strong>negative</strong>: a well-motivated hypothesis about lexical search
       was refuted, a wider candidate pool made reranking worse, an accuracy gain
       was very nearly written up as a speed optimisation, a QLoRA fine-tune that
-      improved almost every metric made the system worse, and the streaming
-      service's headline 18.9× speedup turned out to hold only for a single user.
+      improved almost every metric made the system worse, neither agentic
+      mechanism was calibrated enough to help, and the streaming service's
+      headline 18.9× speedup turned out to hold only for a single user.
     </p>
     <p>
       Each was found by reading raw output, or by measuring a condition that was
@@ -1112,7 +1113,139 @@ Les petites entités sont assujetties, sauf option, au Système minimal…</code
 
   <section>
     <div class="mark">§&nbsp;7</div>
-    <h2>Serving, and a fourth negative result</h2>
+    <h2>The agentic layer: two mechanisms, neither calibrated</h2>
+    <p>
+      An LLM was put in the retrieval loop twice, as separate switches so that
+      "the agent helped" could be decomposed into which part helped:
+      <code>dense → [decompose] → rerank → [verify]</code>. Decomposition splits
+      a question into sub-questions and fuses the rankings with RRF;
+      verification asks whether the passages suffice and searches again with
+      whatever the model says is missing. Both satisfy the same
+      <code>Retriever</code> protocol as every other stage, so the harness
+      scored them with the code that produced §5.
+    </p>
+    <div class="tw">
+      <table>
+        <thead>
+          <tr><th>Metric</th><th class="n">rerank-fast</th><th class="n">+ decompose</th><th class="n">+ verify</th></tr>
+        </thead>
+        <tbody>
+          <tr><td>recall@1</td><td class="n win">0.647</td><td class="n">0.647</td><td class="n loss">0.578</td></tr>
+          <tr><td>recall@5</td><td class="n win">0.824</td><td class="n">0.824</td><td class="n loss">0.814</td></tr>
+          <tr><td>MRR</td><td class="n win">0.776</td><td class="n">0.776</td><td class="n loss">0.717</td></tr>
+          <tr><td>nDCG@5</td><td class="n win">0.766</td><td class="n">0.766</td><td class="n loss">0.722</td></tr>
+          <tr><td>latency median</td><td class="n win">240 ms</td><td class="n">655 ms</td><td class="n loss">1767 ms</td></tr>
+          <tr><td>latency p90</td><td class="n win">312 ms</td><td class="n">804 ms</td><td class="n loss">11049 ms</td></tr>
+        </tbody>
+        <caption>Ship neither. Decomposition matches the baseline to three decimals on every metric and every question kind, at 2.7× the latency.</caption>
+      </table>
+    </div>
+
+    <h3>Decomposition refuses precisely where it would help<span class="tag neg">no-op</span></h3>
+    <p>
+      Identical numbers are equally consistent with "the mechanism does not
+      work" and "the mechanism never ran", so the raw reply was recorded for all
+      59 questions.
+    </p>
+    <div class="tw">
+      <table>
+        <thead>
+          <tr><th>Kind</th><th class="n">Decomposed</th></tr>
+        </thead>
+        <tbody>
+          <tr><td><strong>multi_hop</strong> — the target</td><td class="n loss">1 / 9</td></tr>
+          <tr><td>cross_act</td><td class="n">1 / 4</td></tr>
+          <tr><td>temporal</td><td class="n">1 / 5</td></tr>
+          <tr><td>lookup</td><td class="n">1 / 33</td></tr>
+          <tr><td><strong>unanswerable</strong> — where it is useless</td><td class="n loss">3 / 8</td></tr>
+        </tbody>
+        <caption>47 of 59 replies declared the question atomic.</caption>
+      </table>
+    </div>
+    <blockquote>
+      <p>
+        Combien de personnes faut-il au minimum pour constituer une société
+        coopérative simplifiée, <strong>et</strong> combien pour une société
+        coopérative avec conseil d'administration&nbsp;?
+      </p>
+    </blockquote>
+    <p>
+      Explicit conjunction, two distinct points of law, two articles in the gold
+      set — declared single-article, eight times out of nine. <strong>The one
+      kind it did split is <code>unanswerable</code></strong>, where the corpus
+      holds no answer and sub-questions retrieve nothing useful by construction.
+      Its judgement is not weak, it is inverted.
+    </p>
+
+    <h3>Verification is never satisfied, and that costs<span class="tag neg">harmful</span></h3>
+    <div class="tw">
+      <table>
+        <tbody>
+          <tr><td>Questions where it asked for more</td><td class="n loss">55 / 59</td></tr>
+          <tr><td>Top-5 rankings it changed</td><td class="n">14</td></tr>
+          <tr><td>Questions it <strong>improved</strong></td><td class="n loss">0</td></tr>
+          <tr><td>Questions it damaged</td><td class="n">1</td></tr>
+          <tr><td>Slowest single question</td><td class="n loss">42 s</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <p>
+      The predicted signature appeared exactly. From
+      <code>12_agent_verify.yaml</code>, before the run: <em>a confident
+      follow-up query can displace a true positive out of the top five; RRF
+      fusion limits the damage but does not prevent it, so a drop on lookup
+      would be the signature.</em> Lookup recall@5 held at 0.879 while lookup
+      MRR fell 0.798 → 0.749 — true positives pushed <em>down</em> inside the
+      top five rather than out of it.
+    </p>
+
+    <h3>One reason for both failures</h3>
+    <p>
+      The decomposer is asked <em>does this need several articles?</em> and says
+      no 47 times in 59. The verifier is asked <em>do these passages
+      suffice?</em> and says no 55 times in 59. Neither is calibrated; one
+      almost never acts, the other almost always does, and only the acting one
+      moves the metrics — downward.
+    </p>
+    <p>
+      §6 already recorded the limit underneath this. Both false abstentions in
+      the generation baseline were questions where retrieval had not supplied
+      the governing article and the model declined correctly: <strong>it knew
+      the context was insufficient.</strong> What it could not do is name the
+      article that would fix it, never having seen it. Verification asks for
+      exactly that, so it returns a plausible legal phrase — and a plausible
+      phrase retrieved and fused is a distractor.
+    </p>
+
+    <div class="note">
+      <p class="detector">A null result that rested on luck</p>
+      <p>
+        The decomposer never once emitted the token it was asked for. Told in
+        French to reply <code>ATOMIQUE</code>, it produced <code>ATOMIC</code>,
+        <code>ATOMICITY</code> twice, a sentence of commentary with
+        <code>ATOMIQUE</code> at the end, and once simply <code>Non</code>.
+      </p>
+      <p>
+        All five reached the right outcome, through three <em>different</em>
+        accidents: two were shorter than the minimum sub-question length, one
+        survived as a single line and was killed by the rule that one part is
+        not a decomposition, and one was prose. <strong>None was caught by the
+        check written to catch them.</strong> Two lines of commentary instead of
+        one, and the model's commentary about the question would have been
+        issued as sub-questions.
+      </p>
+      <p>
+        The check now matches on the stem, per line, for single-word replies,
+        with all five real strings pinned as tests. Re-running reproduced every
+        number to three decimals — so the null result stands, but it stood on
+        luck first, and a null result resting on luck is not a null result.
+      </p>
+    </div>
+  </section>
+
+  <section>
+    <div class="mark">§&nbsp;8</div>
+    <h2>Serving, and another negative result</h2>
     <p>
       The system is served by FastAPI with server-sent events, a streaming UI,
       and a Docker image. The service loads one <code>ExperimentConfig</code> and
@@ -1196,7 +1329,7 @@ Les petites entités sont assujetties, sauf option, au Système minimal…</code
   </section>
 
   <section>
-    <div class="mark">§&nbsp;8</div>
+    <div class="mark">§&nbsp;9</div>
     <h2>What this project demonstrates</h2>
     <p>Stated as claims, each with the evidence behind it.</p>
     <p>
@@ -1241,7 +1374,7 @@ Les petites entités sont assujetties, sauf option, au Système minimal…</code
   </section>
 
   <section>
-    <div class="mark">§&nbsp;9</div>
+    <div class="mark">§&nbsp;10</div>
     <h2>Limits</h2>
     <p>
       Stated because a results table that names its own limits is worth more than
@@ -1290,7 +1423,7 @@ Les petites entités sont assujetties, sauf option, au Système minimal…</code
   </section>
 
   <section>
-    <div class="mark">§&nbsp;10</div>
+    <div class="mark">§&nbsp;11</div>
     <h2>What would come next</h2>
     <p>
       <strong>Fix <code>cross_act</code> properly.</strong> Rebuild it from real

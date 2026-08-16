@@ -263,3 +263,45 @@ def test_describe_reports_agent_stages_in_pipeline_order():
     assert describe(agent_config(decompose=True, verify=True)) == (
         "dense + decompose + rerank + verify"
     )
+
+
+# --- atomic verdicts the model actually produced ---------------------------
+#
+# Every string here was emitted by Qwen3-4B during the Phase 5 run, asked in
+# French to reply "ATOMIQUE". None of them is "ATOMIQUE". All five reached the
+# right outcome through accidents of length rather than through the check that
+# was supposed to catch them -- see the note in prompts.py.
+
+
+@pytest.mark.parametrize(
+    "reply",
+    [
+        "ATOMIQUE",
+        "ATOMIC",  # q004: the English stem
+        "ATOMICITY",  # q024, q050: not a verdict in any language
+        "ATOMIQUE.",
+        "atomique",
+    ],
+)
+def test_observed_atomic_spellings_are_recognised(reply):
+    assert parse_subquestions(reply, original=ORIGINAL, max_subquestions=3) == []
+
+
+def test_atomic_verdict_buried_after_commentary_is_recognised():
+    """q054, verbatim. Previously survived only because one line is not two."""
+    reply = (
+        "La question porte sur un montant spécifique et ne fait pas référence à "
+        "plusieurs dispositions juridiques distinctes.\n\nATOMIQUE"
+    )
+    assert parse_subquestions(reply, original=ORIGINAL, max_subquestions=3) == []
+
+
+def test_a_subquestion_mentioning_an_atom_is_not_a_verdict():
+    """The stem check must not swallow real content."""
+    reply = "Quelles sont les règles sur l'énergie atomique ?\nQuelles sanctions s'appliquent ?"
+    assert len(parse_subquestions(reply, original=ORIGINAL, max_subquestions=3)) == 2
+
+
+def test_a_bare_refusal_yields_no_subquestions():
+    """q060, verbatim."""
+    assert parse_subquestions("Non", original=ORIGINAL, max_subquestions=3) == []

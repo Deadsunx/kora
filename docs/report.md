@@ -1,7 +1,7 @@
 # Kora: a measured retrieval system for French-language African business law
 
-Technical report · August 2026 · 3,056 articles · 59 validated questions · 12
-recorded runs · one RTX 4070 Laptop, 8 GiB
+Technical report · August 2026 · 3,056 articles · 59 validated questions · 14
+recorded runs · 252 tests · one RTX 4070 Laptop, 8 GiB
 
 ---
 
@@ -19,10 +19,12 @@ The point is that most of the project's principal findings are **negative**: a
 well-motivated hypothesis about lexical search was refuted, a wider candidate
 pool made reranking worse, an accuracy gain was very nearly written up as a
 speed optimisation, a QLoRA fine-tune that improved almost every metric made the
-system worse, and the streaming service's headline 18.9× speedup turned out to
-hold only for a single user. Each was found by reading raw output or by
-measuring a condition that was not flattering. The fine-tune was invisible to
-every metric in the harness.
+system worse, neither agentic mechanism was calibrated enough to help, and the
+streaming service's headline 18.9× speedup turned out to hold only for a single
+user. Each was found by reading raw output, or by measuring a condition that was
+not flattering. Two of them were invisible to every metric in the harness.
+
+Reranking is the one component that earned its cost.
 
 This report is organised around how each was found, because that is the
 transferable part.
@@ -68,7 +70,7 @@ embedding settings carry a *separate* hash, so changing the generator reuses the
 existing index rather than rebuilding it — reuse that is legitimate because the
 hash proves the index is the same.
 
-This guarantee turned out to be weaker than stated. §8 reports where it failed.
+This guarantee turned out to be weaker than stated. §9 reports where it failed.
 
 **Configs reject unknown keys.** A mistyped YAML key raises at load time instead
 of silently falling back to a default and invalidating a whole results table.
@@ -507,7 +509,115 @@ A silent failure that produces a plausible number is worse than a crash.
 
 ---
 
-## 7. Serving, and a fourth negative result
+## 7. The agentic layer: two mechanisms, neither calibrated
+
+An LLM was put in the retrieval loop twice, as separate switches so that "the
+agent helped" could be decomposed into which part helped:
+
+```
+dense → [decompose] → rerank → [verify]
+```
+
+Decomposition splits a question into sub-questions, retrieves for each, and
+fuses the rankings with RRF. Verification asks whether the retrieved passages
+suffice and searches again with whatever the model says is missing. Both satisfy
+the same `Retriever` protocol as every other stage, so the harness scored them
+with the code that produced §5.
+
+| metric | rerank-fast | + decompose | + verify |
+|---|---:|---:|---:|
+| recall@1 | **0.647** | 0.647 | 0.578 |
+| recall@5 | **0.824** | 0.824 | 0.814 |
+| MRR | **0.776** | 0.776 | 0.717 |
+| nDCG@5 | **0.766** | 0.766 | 0.722 |
+| latency median | **240 ms** | 655 ms | 1767 ms |
+| latency p90 | **312 ms** | 804 ms | **11049 ms** |
+
+**Ship neither.** Decomposition matches the baseline to three decimals on every
+metric and every question kind, at 2.7× the latency. Verification is worse than
+the baseline everywhere, at 35× the p90.
+
+### Decomposition refuses precisely where it would help
+
+Identical numbers are equally consistent with "the mechanism does not work" and
+"the mechanism never ran", so the raw reply was recorded for all 59 questions.
+
+| what the model replied | count |
+|---|---:|
+| the question is atomic | **47 / 59** |
+| a decomposition | 7 |
+| unparseable | 5 |
+
+| kind | decomposed |
+|---|---:|
+| **multi_hop** | **1 / 9** |
+| cross_act | 1 / 4 |
+| temporal | 1 / 5 |
+| lookup | 1 / 33 |
+| **unanswerable** | **3 / 8** |
+
+Among the questions it called atomic:
+
+> *Combien de personnes faut-il au minimum pour constituer une société
+> coopérative simplifiée, **et** combien pour une société coopérative avec
+> conseil d'administration ?*
+
+Explicit conjunction, two distinct points of law, two articles in the gold set —
+declared single-article, eight times out of nine. **The one kind it did split is
+`unanswerable`**, where the corpus holds no answer and sub-questions retrieve
+nothing useful by construction. Its judgement is not weak, it is inverted.
+
+### Verification is never satisfied, and that costs
+
+| | |
+|---|---:|
+| questions where it asked for more | **55 / 59** |
+| top-5 rankings it changed | 14 |
+| questions it **improved** | **0** |
+| questions it **damaged** | 1 |
+| slowest single question | **42 s** |
+
+The predicted signature appeared exactly. From `12_agent_verify.yaml`, before
+the run: *a confident follow-up query can displace a true positive out of the
+top five; RRF fusion limits the damage but does not prevent it, so a drop on
+lookup would be the signature.* Lookup recall@5 held at 0.879 while lookup MRR
+fell 0.798 → 0.749 — true positives pushed *down* inside the top five rather
+than out of it.
+
+### One reason for both failures
+
+The decomposer is asked *does this need several articles?* and says no 47 times
+in 59. The verifier is asked *do these passages suffice?* and says no 55 times
+in 59. Neither is calibrated; one almost never acts, the other almost always
+does, and only the acting one moves the metrics — downward.
+
+§6 already recorded the limit underneath this. Both false abstentions in the
+generation baseline were questions where retrieval had not supplied the
+governing article and the model declined correctly: **it knew the context was
+insufficient.** What it could not do is name the article that would fix it,
+never having seen it. Verification asks for exactly that, so it returns a
+plausible legal phrase, and a plausible phrase retrieved and fused is a
+distractor.
+
+### A null result that rested on luck
+
+The decomposer never once emitted the token it was asked for. Told in French to
+reply `ATOMIQUE`, it produced `ATOMIC`, `ATOMICITY` twice, a sentence of
+commentary with `ATOMIQUE` at the end, and once simply `Non`.
+
+All five reached the right outcome, through three *different* accidents: two
+were shorter than the minimum sub-question length, one survived as a single line
+and was killed by the rule that one part is not a decomposition, and one was
+prose. **None was caught by the check written to catch them.** Two lines of
+commentary instead of one and the model's commentary about the question would
+have been issued as sub-questions.
+
+The check now matches on the stem, per line, for single-word replies, with all
+five real strings pinned as tests. Re-running reproduced every number to three
+decimals — so the null result stands, but it stood on luck first, and a null
+result resting on luck is not a null result.
+
+## 8. Serving, and another negative result
 
 The system is served by FastAPI with server-sent events, a streaming UI, and a
 Docker image. The service loads one `ExperimentConfig` and builds the pipeline
@@ -553,7 +663,7 @@ than to a saturated GPU. And retrieval measures **200 ms** over HTTP against the
 **193 ms** §5 recorded in-process, so the ablation table's latencies survive
 contact with a network client.
 
-## 8. What this project demonstrates
+## 9. What this project demonstrates
 
 Stated as claims, each with the evidence behind it:
 
@@ -562,9 +672,10 @@ baseline, pre-registered hypotheses, and 12 runs each traceable to the exact
 system that produced it.
 
 **That the interesting results here are negative.** BM25 refuted three ways, a
-wider pool that hurt, a fine-tune that regressed, a streaming speedup that held
-only for one user. All four were plausible enough to have been shipped on
-intuition.
+wider pool that hurt, a fine-tune that regressed, two agentic mechanisms that
+did nothing and harm respectively, a streaming speedup that held only for one
+user. Every one was plausible enough to have been shipped on intuition, and
+three of them would have been, on any evidence short of reading the output.
 
 **That the system is served, and served as the thing that was measured.**
 FastAPI with SSE, a streaming UI, a Docker image, and an API whose response
@@ -611,7 +722,7 @@ about where legal meaning lives.
 
 ---
 
-## 9. Limits
+## 10. Limits
 
 Stated because a results table that names its own limits is worth more than one
 that does not.
@@ -636,7 +747,7 @@ that does not.
 - **SYCEBNL-2022 is a scan** and was refused rather than parsed. Seven repealed
   acts remain unsourced.
 
-## 10. What would come next
+## 11. What would come next
 
 **Fix `cross_act` properly.** Rebuild it from real inter-act textual
 cross-references, which is the only way to make the weakest row in the table
@@ -675,4 +786,6 @@ resolved config beside them.
 | [`ablations.md`](ablations.md) | retrieval ablations (§5) |
 | [`generation-baseline.md`](generation-baseline.md) | generation + hypothesis (§6) |
 | [`fine-tuning-results.md`](fine-tuning-results.md) | the adapter regression (§6) |
-| [`serving.md`](serving.md) | API, streaming, Docker, benchmarks (§7) |
+| [`agentic.md`](agentic.md) | decomposition and self-correction (§7) |
+| [`serving.md`](serving.md) | API, streaming, Docker, benchmarks (§8) |
+| [`reproducibility.md`](reproducibility.md) | where content-hashing broke (§9) |

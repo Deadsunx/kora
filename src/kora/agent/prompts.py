@@ -20,6 +20,23 @@ import re
 # language-understanding problem.
 ATOMIC_TOKEN = "ATOMIQUE"
 
+# The model does not reliably emit the token it was given. Asked in French for
+# "ATOMIQUE" it produced `ATOMIC` and `ATOMICITY` -- the English stem, and a
+# word that is not a verdict in any language -- and once buried the correct
+# token at the end of a sentence of commentary.
+#
+# All five cases happened to reach the right answer anyway, by three different
+# accidents: two replies were shorter than the minimum sub-question length, one
+# survived as a single line and was dropped by the two-part rule, and one was
+# prose. That is luck, not logic. A model that had written two lines of
+# commentary instead of one would have had its commentary retrieved as
+# sub-questions.
+#
+# So the check is on the stem, per line, for a reply that is one word: it
+# catches every observed spelling and cannot swallow a genuine sub-question,
+# which is never a single word.
+_ATOMIC_STEM = "ATOMI"
+
 DECOMPOSE_SYSTEM = """\
 Tu prépares une recherche documentaire dans le droit OHADA. Tu ne réponds pas \
 à la question.
@@ -77,6 +94,16 @@ def build_verify_messages(question: str, context: str) -> list[dict[str, str]]:
 _LIST_PREFIX_RE = re.compile("^\\s*(?:\\d+\\s*[.)\\-]|[-*\u2022\u2013])\\s*")
 
 
+def is_atomic_verdict(line: str) -> bool:
+    """Whether one line of a reply is the model declining to decompose.
+
+    Requires the line to be a single word beginning with the stem, so a
+    sub-question that happens to mention an atom is not mistaken for a verdict.
+    """
+    cleaned = _clean(line).strip(" .:!;").upper()
+    return bool(cleaned) and " " not in cleaned and cleaned.startswith(_ATOMIC_STEM)
+
+
 def _clean(line: str) -> str:
     line = _LIST_PREFIX_RE.sub("", line).strip()
     # Models occasionally wrap a sub-question in quotes or bold markers.
@@ -96,7 +123,12 @@ def parse_subquestions(reply: str, *, original: str, max_subquestions: int) -> l
     hypothesis, that this experiment is not testing.
     """
     text = reply.strip()
-    if not text or text.upper().startswith(ATOMIC_TOKEN):
+    if not text:
+        return []
+
+    # An atomic verdict anywhere in the reply settles it, wherever the model
+    # chose to put it.
+    if any(is_atomic_verdict(line) for line in text.splitlines()):
         return []
 
     normalised_original = _normalise(original)
@@ -108,8 +140,6 @@ def parse_subquestions(reply: str, *, original: str, max_subquestions: int) -> l
         # Two characters cannot be a legal question; this drops stray bullets
         # and the blank lines models like to emit between items.
         if len(candidate) < 10:
-            continue
-        if candidate.upper().startswith(ATOMIC_TOKEN):
             continue
         key = _normalise(candidate)
         if key == normalised_original or key in seen:

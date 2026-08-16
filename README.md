@@ -2,9 +2,8 @@
 
 **Retrieval-augmented question answering over French-language African business law (OHADA).**
 
-> Status: phases 0–4 complete, report written. Every number below is
-> reproducible from a config file in `configs/`, and links to the write-up that
-> produced it.
+> Status: **all eight phases complete.** Every number below links to the
+> write-up that produced it.
 
 **→ [Technical report](docs/report.md)** — the whole project in one document,
 organised around how each finding was found.
@@ -45,7 +44,7 @@ is a preference, not a result.
 ## What exists
 
 **3,056 articles** parsed from source PDFs across 10 acts · **59 human-validated
-questions**, 51 answerable · **12 recorded runs** · 202 tests · single RTX 4070
+questions**, 51 answerable · **14 recorded runs** · 252 tests · single RTX 4070
 Laptop, 8 GiB.
 
 | | |
@@ -54,6 +53,7 @@ Laptop, 8 GiB.
 | Retrieval | `multilingual-e5-base` dense + `bge-reranker-v2-m3` cross-encoder |
 | Generation | Qwen3-4B-Instruct-2507, 4-bit NF4 |
 | Fine-tuning | QLoRA r=16, paged 8-bit AdamW, gradient checkpointing |
+| Serving | FastAPI + SSE, streaming UI, Docker |
 
 ## Results
 
@@ -103,6 +103,24 @@ article's opening regardless of the question — **38 of 47** answers, at 98.4%
 token accuracy and 0.027 loss. Every structural metric improved or held while
 quality collapsed. A dashboard would have called it a successful fine-tune.
 
+### Agentic layer — [`docs/agentic.md`](docs/agentic.md)
+
+**Ship neither.** Decomposition is an exact no-op at 2.7× the latency;
+verification is actively harmful at 35× p90.
+
+| | rerank-fast | + decompose | + verify |
+|---|---:|---:|---:|
+| recall@5 | **0.824** | 0.824 | 0.814 |
+| MRR | **0.776** | 0.776 | 0.717 |
+| latency p90 | **312 ms** | 804 ms | 11049 ms |
+
+The metrics don't explain themselves, so the raw replies were read. The
+decomposer called **47 of 59** questions atomic — including **8 of the 9
+multi_hop** questions it exists for, several with an explicit *et* joining two
+distinct points of law. The one kind it did split was `unanswerable`, where
+splitting is useless. The verifier is the mirror image: it asked for more on
+**55 of 59**, improved **0**, and damaged 1.
+
 ### Serving — [`docs/serving.md`](docs/serving.md)
 
 FastAPI + SSE, streaming UI, one GPU. Generation is serialised behind a lock,
@@ -119,7 +137,7 @@ client. At four it is **1.7×**, because time-to-first-token becomes queue wait
 rather than prefill. Throughput is flat by design and the wall clock proves it:
 179 s, 170 s, 169 s for the same eight answers.
 
-## Four findings, three of them negative
+## Six findings, five of them negative
 
 1. **BM25 does not help on legal French.** The hypothesis was recorded in
    `configs/experiments/02_hybrid.yaml` *before* measurement: exact tokens like
@@ -135,6 +153,12 @@ rather than prefill. Throughput is flat by design and the wall clock proves it:
    gain. An article's operative rule sits at its opening; long enumerations
    dilute the relevance signal.
 4. **Fine-tuning optimised the proxy, not the task** — see above.
+5. **Streaming's 18.9x speedup holds for one user**, and falls to 1.7x at four,
+   because time-to-first-token becomes queue wait rather than prefill.
+6. **Neither agent is calibrated.** The decomposer answers "one article" to 47
+   of 59 questions; the verifier answers "not enough" to 55 of 59. One almost
+   never acts, the other almost always does, and only the acting one moves the
+   metrics — downward.
 
 Each was found by reading outputs, not by reading metrics. The same method
 caught table-of-contents contamination in the parser that both existing
@@ -165,7 +189,7 @@ turned off and measured.
 | 2 | Evaluation harness + gold QA set | done — 59 validated questions |
 | 3 | Hybrid retrieval, reranking + ablations | done — +8.9 recall@5, BM25 refuted |
 | 4 | QLoRA fine-tuning on a single 8 GiB GPU | done — negative result, not shipped |
-| 5 | Agentic layer: decomposition, self-correction | — |
+| 5 | Agentic layer: decomposition, self-correction | done — [`docs/agentic.md`](docs/agentic.md); neither shipped |
 | 6 | FastAPI service, streaming UI, Docker, benchmarks | done — [`docs/serving.md`](docs/serving.md) |
 | 7 | Technical report and demo | report done — [`docs/report.md`](docs/report.md); demo waits on phase 6 |
 
