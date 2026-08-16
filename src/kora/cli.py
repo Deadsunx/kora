@@ -812,6 +812,82 @@ def eval_run(
     console.print(f"\nWritten to [dim]{destination}[/]")
 
 
+train_app = typer.Typer(help="QLoRA fine-tuning.", no_args_is_help=True)
+app.add_typer(train_app, name="train")
+
+
+@train_app.command("build-data")
+def train_build_data(
+    gold_path: Path = typer.Option(paths.EVAL_DIR / "gold_qa.jsonl", "--gold"),
+    out: Path = typer.Option(paths.DATA_DIR / "training" / "sft.jsonl", "--out"),
+    n_cite: int = typer.Option(600, help="Examples teaching the citation format."),
+    n_abstain: int = typer.Option(150, help="Examples teaching abstention."),
+    n_repealed: int = typer.Option(100, help="Examples teaching repealed-law avoidance."),
+    seed: int = typer.Option(42),
+) -> None:
+    """Build instruction data, excluding every article used in evaluation."""
+    from kora.eval.dataset import load_gold_set
+    from kora.retrieval.index import load_articles
+    from kora.training.dataset import build_dataset, save_dataset
+
+    articles = load_articles()
+    if not articles:
+        console.print("[red]No parsed articles. Run `kora corpus parse` first.[/]")
+        raise typer.Exit(1)
+
+    gold = load_gold_set(gold_path)
+    examples = build_dataset(
+        articles,
+        gold,
+        n_cite=n_cite,
+        n_abstain=n_abstain,
+        n_repealed=n_repealed,
+        seed=seed,
+    )
+    path = save_dataset(examples, out)
+
+    table = Table(title="Training data")
+    table.add_column("kind", style="bold")
+    table.add_column("examples", justify="right")
+    for kind in ("cite", "abstain", "repealed"):
+        table.add_row(kind, str(sum(1 for e in examples if e.kind == kind)))
+    table.add_row("[bold]total[/]", f"[bold]{len(examples)}[/]")
+    console.print(table)
+
+    gold_articles = {cid for q in gold for cid in q.gold_chunk_ids}
+    console.print(
+        f"\nExcluded [bold]{len(gold_articles)}[/] gold articles from "
+        f"{len(articles)} available.\nWritten to [dim]{path}[/]"
+    )
+
+
+@train_app.command("run")
+def train_run(
+    config: Path = typer.Option(Path("configs/training/qlora.yaml"), "--config", "-c", exists=True),
+) -> None:
+    """Fine-tune and write an adapter."""
+    from kora.training.config import load_training_config
+    from kora.training.train import train
+
+    cfg = load_training_config(config)
+
+    table = Table(show_header=False, box=None)
+    table.add_row("[bold]run[/]", cfg.run_id)
+    table.add_row("[bold]base model[/]", cfg.base_model)
+    table.add_row("[bold]lora[/]", f"r={cfg.lora.r} alpha={cfg.lora.alpha}")
+    table.add_row("[bold]modules[/]", ", ".join(cfg.lora.target_modules))
+    table.add_row("[bold]effective batch[/]", str(cfg.effective_batch_size))
+    table.add_row("[bold]max length[/]", str(cfg.max_length))
+    console.print(table)
+
+    adapter = train(cfg)
+    console.print(f"\n[green]Adapter written to[/] {adapter}")
+    console.print(
+        "\nEvaluate it by pointing an experiment at it:\n"
+        f"  [dim]generator.adapter_path: {adapter}[/]"
+    )
+
+
 def load_manifest_or_exit():
     """Load the manifest, turning validation errors into a readable message."""
     from pydantic import ValidationError

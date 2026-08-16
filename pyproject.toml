@@ -112,7 +112,7 @@ plugins = ["pydantic.mypy"]
 # rank_bm25 ships no type information. Scoped to the one module rather than
 # blanket-ignoring untyped imports, so a future untyped dependency still shows up.
 [[tool.mypy.overrides]]
-module = ["rank_bm25.*"]
+module = ["rank_bm25.*", "datasets.*"]
 ignore_missing_imports = true
 follow_imports = "skip"
 

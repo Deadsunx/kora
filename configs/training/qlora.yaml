@@ -1,0 +1,53 @@
+# QLoRA fine-tuning of Qwen3-4B-Instruct-2507 on a single 8 GiB GPU.
+#
+# The target is the output contract, not knowledge: a rank-16 adapter over a few
+# hundred templated examples will not teach OHADA law to a 4B model, and the
+# writeup says so. What it can teach, and what the harness already measures:
+#
+#   citation_recall / citation_precision   cite in the parseable form
+#   correct_abstention / false_abstention  decline when the context cannot support
+#   answers_citing_repealed                do not present repealed text as in force
+#
+# If those improve and answer quality does not degrade, the claim is bounded by
+# evidence. If citation precision falls, the adapter has learned to cite more
+# rather than better, and that is reportable too.
+
+name: contract-r16
+description: >
+  Rank-16 QLoRA teaching the citation, abstention and repealed-law contract.
+  Loss on assistant turns only.
+
+base_model: Qwen/Qwen3-4B-Instruct-2507
+dataset_path: data/training/sft.jsonl
+
+lora:
+  r: 16
+  alpha: 32
+  dropout: 0.05
+  # Attention and MLP. Style -- which is what is being taught -- lives in the
+  # MLP as much as in attention.
+  target_modules:
+    - q_proj
+    - k_proj
+    - v_proj
+    - o_proj
+    - gate_proj
+    - up_proj
+    - down_proj
+
+epochs: 2.0
+learning_rate: 0.0002
+lr_scheduler: cosine
+warmup_ratio: 0.03
+weight_decay: 0.0
+max_grad_norm: 0.3
+
+# 8 GiB budget: one sequence of activations at a time, effective batch of 8.
+batch_size: 1
+gradient_accumulation: 8
+max_length: 2048
+gradient_checkpointing: true
+optimizer: paged_adamw_8bit
+
+seed: 42
+eval_fraction: 0.05

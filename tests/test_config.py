@@ -128,12 +128,31 @@ def test_invalid_values_rejected(payload: dict) -> None:
         ExperimentConfig.model_validate(payload)
 
 
-def test_shipped_configs_all_load() -> None:
-    """Every config in configs/ must be valid -- guards against drift."""
+def test_shipped_experiment_configs_all_load() -> None:
+    """Every experiment config must be valid -- guards against drift.
+
+    `configs/training/` is excluded: those are TrainingConfig, a different
+    schema describing how an adapter is produced rather than how a system is
+    evaluated. They are checked by test_shipped_training_configs_all_load.
+    """
     from kora import paths
 
-    config_files = sorted(paths.CONFIG_DIR.rglob("*.yaml"))
-    assert config_files, "no configs found"
+    config_files = [
+        path for path in sorted(paths.CONFIG_DIR.rglob("*.yaml")) if "training" not in path.parts
+    ]
+    assert config_files, "no experiment configs found"
     for path in config_files:
         cfg = load_config(path)
         assert cfg.name
+
+
+def test_shipped_training_configs_all_load() -> None:
+    from kora import paths
+    from kora.training.config import load_training_config
+
+    config_files = sorted((paths.CONFIG_DIR / "training").glob("*.yaml"))
+    assert config_files, "no training configs found"
+    for path in config_files:
+        cfg = load_training_config(path)
+        assert cfg.name
+        assert cfg.effective_batch_size > 0
