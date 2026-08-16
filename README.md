@@ -2,8 +2,12 @@
 
 **Retrieval-augmented question answering over French-language African business law (OHADA).**
 
-> Status: phases 0–4 complete. Every number below is reproducible from a config
-> file in `configs/`, and links to the write-up that produced it.
+> Status: phases 0–4 complete, report written. Every number below is
+> reproducible from a config file in `configs/`, and links to the write-up that
+> produced it.
+
+**→ [Technical report](docs/report.md)** — the whole project in one document,
+organised around how each finding was found.
 
 ---
 
@@ -147,7 +151,7 @@ turned off and measured.
 | 4 | QLoRA fine-tuning on a single 8 GiB GPU | done — negative result, not shipped |
 | 5 | Agentic layer: decomposition, self-correction | — |
 | 6 | FastAPI service, streaming UI, Docker, benchmarks | — |
-| 7 | Technical report and demo | — |
+| 7 | Technical report and demo | report done — [`docs/report.md`](docs/report.md); demo waits on phase 6 |
 
 ## Setup
 
