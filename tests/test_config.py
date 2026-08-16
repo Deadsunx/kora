@@ -156,3 +156,72 @@ def test_shipped_training_configs_all_load() -> None:
         cfg = load_training_config(path)
         assert cfg.name
         assert cfg.effective_batch_size > 0
+
+
+# ---------------------------------------------------------------------------
+# Fingerprint stability
+#
+# These pin the identity of runs whose numbers are published. They exist
+# because that identity was found to have already drifted once: adding
+# `max_length` and `precision` to RerankerConfig in Phase 3 re-hashed every
+# config that existed before it, so nine of eleven recorded runs can no longer
+# be regenerated -- see docs/reproducibility.md. The resolved config stored in
+# each run directory still records exactly what ran, so nothing published is
+# unverifiable; what broke is the config-file-to-run-id link.
+#
+# A test cannot undo that. It can make the next occurrence loud instead of
+# silent, which is the whole reason it is here.
+# ---------------------------------------------------------------------------
+
+# run_id -> the config file that must continue to produce it.
+PINNED_RUN_IDS = {
+    "rerank-fast-54cefb1da669": "experiments/07_rerank_fast.yaml",
+    "adapter-r16-6c121c457d35": "experiments/10_adapter.yaml",
+}
+
+
+def test_published_run_ids_are_stable() -> None:
+    """The best retrieval system and the adapter must keep their identities.
+
+    If this fails, a schema change has renamed a run that documents cite by id.
+    Either revert the change, or exclude the new field from the fingerprint the
+    way `agent` is excluded, or accept the rename and update every reference.
+    """
+    from kora import paths
+
+    for expected_run_id, relative in PINNED_RUN_IDS.items():
+        cfg = load_config(paths.CONFIG_DIR / relative)
+        assert cfg.run_id == expected_run_id, (
+            f"{relative} now hashes to {cfg.run_id!r}, not {expected_run_id!r}. "
+            "A config field was added or a default changed."
+        )
+
+
+def test_disabled_agent_does_not_change_a_configs_identity() -> None:
+    """Adding the agent must not rename systems that predate it.
+
+    The narrow exception in `fingerprint()`. A subsystem that is switched off
+    contributes nothing to behaviour, so it must not contribute to identity --
+    otherwise every phase that adds a component renames every earlier run.
+    """
+    from kora.config import AgentConfig, ExperimentConfig
+
+    plain = ExperimentConfig(name="x")
+    explicitly_off = ExperimentConfig(name="x", agent=AgentConfig(enabled=False, decompose=False))
+
+    # Off is off, whatever the other switches say.
+    assert plain.fingerprint() == explicitly_off.fingerprint()
+
+    enabled = ExperimentConfig(name="x", agent=AgentConfig(enabled=True))
+    assert enabled.fingerprint() != plain.fingerprint()
+
+
+def test_agent_settings_change_identity_once_enabled() -> None:
+    """Two different agents must not share a run directory."""
+    from kora.config import AgentConfig, ExperimentConfig
+
+    decompose = ExperimentConfig(name="x", agent=AgentConfig(enabled=True, decompose=True))
+    verify = ExperimentConfig(
+        name="x", agent=AgentConfig(enabled=True, decompose=True, verify=True)
+    )
+    assert decompose.fingerprint() != verify.fingerprint()

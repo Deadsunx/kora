@@ -148,6 +148,46 @@ class GeneratorConfig(_Base):
     allow_abstention: bool = True
 
 
+class AgentConfig(_Base):
+    """An LLM in the retrieval loop.
+
+    Everything here is off by default, and every part is a separate switch, so
+    "the agent helped" can be decomposed into which part helped. The alternative
+    -- one `agentic: true` flag -- produces a result that cannot be attributed.
+
+    The cost is unusually visible for this component. Decomposition is an extra
+    generation call before retrieval even starts, and verification is another
+    after. On this hardware a short generation is one to three seconds against a
+    193 ms retrieval, so an agent that adds two calls is roughly a 20x latency
+    increase on the retrieval stage. That is the number any accuracy gain has to
+    be weighed against.
+    """
+
+    enabled: bool = False
+
+    # Split a question into sub-questions, retrieve for each, fuse the rankings.
+    # Aimed squarely at multi_hop: a question needing two articles gives the
+    # retriever one query that is a blend of both, and a blend matches neither.
+    decompose: bool = True
+    max_subquestions: int = Field(3, ge=1, le=5)
+
+    # Ask the model whether the retrieved passages actually answer the question,
+    # and retrieve again with a rewritten query if not.
+    verify: bool = False
+    max_steps: int = Field(2, ge=1, le=4)
+
+    # Tokens for the agent's own calls. Far below the generator's 512 because
+    # sub-questions and a sufficiency verdict are short, and generation time is
+    # linear in output length -- the single biggest lever on what the agent costs.
+    max_new_tokens: int = Field(128, gt=0)
+
+    # Whether the original question keeps a place among the fused rankings.
+    # On by default as a floor: if decomposition produces nonsense, the original
+    # query's ranking is still in the fusion and the result degrades gracefully
+    # rather than collapsing.
+    keep_original: bool = True
+
+
 class EvalConfig(_Base):
     """What we measure and against what."""
 
@@ -171,6 +211,7 @@ class ExperimentConfig(_Base):
     retrieval: RetrievalConfig = Field(default_factory=RetrievalConfig)
     reranker: RerankerConfig = Field(default_factory=RerankerConfig)
     generator: GeneratorConfig = Field(default_factory=GeneratorConfig)
+    agent: AgentConfig = Field(default_factory=AgentConfig)
     eval: EvalConfig = Field(default_factory=EvalConfig)
 
     # -- identity -----------------------------------------------------------
@@ -181,8 +222,26 @@ class ExperimentConfig(_Base):
         `name` and `description` are excluded deliberately: renaming an
         experiment should not invalidate its cached index or results. Two
         configs that differ only in label are the same system.
+
+        `agent` is excluded when it is disabled, and this is a deliberate
+        exception rather than an oversight. Adding a field to this model changes
+        the hash of *every* config that ever used it, which would rename every
+        run directory recorded before the field existed and break the link
+        between the published ablation table and the runs behind it. A subsystem
+        that is switched off contributes nothing to the system's behaviour, so
+        excluding it keeps the identity of a system that predates it intact.
+        `tests/test_config.py` pins the run ids of the recorded runs against
+        exactly this.
+
+        The exception is narrow on purpose: it applies to `agent` alone, and a
+        disabled reranker or BM25 still participates, because those were present
+        when the recorded runs were made and changing them now would cause the
+        same breakage in the other direction.
         """
-        payload = self.model_dump(mode="json", exclude={"name", "description"})
+        exclude: set[str] = {"name", "description"}
+        if not self.agent.enabled:
+            exclude.add("agent")
+        payload = self.model_dump(mode="json", exclude=exclude)
         canonical = json.dumps(payload, sort_keys=True, separators=(",", ":"))
         return hashlib.sha256(canonical.encode("utf-8")).hexdigest()[:12]
 

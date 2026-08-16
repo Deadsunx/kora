@@ -226,10 +226,19 @@ tests/
 ## Design notes
 
 **Configs are content-hashed.** A run's identity is a hash of the settings that
-produced it, so two experiments can never overwrite each other's results, and a
-results table months old can be traced back to the exact system that produced it.
+produced it, so two experiments can never overwrite each other's results, and
+each run directory stores the resolved config that produced its numbers.
 Chunking and embedding settings get their own separate hash, so changing the
 generator reuses the existing index instead of rebuilding it.
+
+**That scheme broke, and the break is documented rather than patched over.**
+Adding a field to a config model re-hashes every config that never mentions it,
+so 9 of 11 runs recorded before a Phase 3 schema change can no longer be
+regenerated from a config file. Every published number stays verifiable — the
+stored resolved config is what diagnosed it — but the config-to-run link is
+gone for those runs. See [`docs/reproducibility.md`](docs/reproducibility.md)
+for the measurement, the cause, and why the fix is a pinning test rather than a
+renumbering.
 
 **Configs reject unknown keys.** A mistyped YAML key raises at load time rather
 than falling back to a default and quietly invalidating a whole results table.

@@ -62,11 +62,13 @@ comparison and was never "improved" once experiments began. A baseline that
 drifts makes an ablation table meaningless.
 
 **Configs are content-hashed.** A run's identity is a SHA-256 of the settings
-that produced it. Two experiments cannot overwrite each other's results, and any
-row of any table traces back to the exact system that produced it. Chunking and
+that produced it. Two experiments cannot overwrite each other's results, and
+every run directory stores the resolved config behind its numbers. Chunking and
 embedding settings carry a *separate* hash, so changing the generator reuses the
 existing index rather than rebuilding it — reuse that is legitimate because the
 hash proves the index is the same.
+
+This guarantee turned out to be weaker than stated. §8 reports where it failed.
 
 **Configs reject unknown keys.** A mistyped YAML key raises at load time instead
 of silently falling back to a default and invalidating a whole results table.
@@ -574,6 +576,28 @@ to the system that produced it after it leaves the harness.
 wrong before the systems they scored were: `citation_precision` penalised correct
 behaviour, and the gold set contained articles that were never needed. Both were
 found and both changed the reported numbers.
+
+**And that the project's own central guarantee was overstated.** §2 claims a run
+traces back to the exact system that produced it. Checking rather than restating
+it — while adding a config section in Phase 5 — showed that **9 of 11 recorded
+runs no longer re-hash to their own directory, even from their own stored
+resolved config.** Phase 3 added two fields to `RerankerConfig`, and because the
+fingerprint hashes the fully serialised config, adding a field with a default
+re-hashes every config that never mentions it. Every run recorded before that
+change was orphaned the moment it landed, silently: no collision, no failed
+test, no changed number.
+
+Nothing published is unverifiable — the stored resolved config records what ran,
+and is what diagnosed this. What broke is the config-file-to-run direction. The
+fix is a test pinning the ids that back published numbers, an exclusion rule so
+new subsystems cannot rename old runs, and
+[`docs/reproducibility.md`](reproducibility.md) stating the limitation, rather
+than a renumbering that would rewrite every citation in these documents to
+repair a scheme already broken for nine runs.
+
+That makes four occasions where the instruments were wrong before the systems —
+`citation_precision`, the gold set, TRL's silent loss mask, and this. All four
+were silent, and all four produced numbers that looked reasonable.
 
 **That silent failures are the dangerous ones.** The loss mask that masked
 nothing, the parse defect that both self-checks passed, the adapter that improved
