@@ -15,6 +15,7 @@ import pytest
 from kora.eval.metrics import (
     abstention_scores,
     citation_precision,
+    citation_recall,
     dcg,
     hit_rate,
     ndcg_at_k,
@@ -128,6 +129,31 @@ def test_hit_rate_is_binary() -> None:
 
 
 # -- citations --------------------------------------------------------------
+
+
+def test_citation_recall_is_unharmed_by_extra_citations() -> None:
+    """The behaviour precision punishes and recall does not.
+
+    Observed in the first generated answers: the model cited article 24 *and*
+    article 25 on the seat of a company. Both correct, both retrieved; the gold
+    set lists only the minimum needed.
+    """
+    gold = {"AUSCGIE-2014#art24"}
+    cited = ["AUSCGIE-2014#art24", "AUSCGIE-2014#art25"]
+    assert citation_recall(cited, gold) == 1.0
+    assert citation_precision(cited, gold) == 0.5
+
+
+def test_citation_recall_penalises_a_missing_governing_article() -> None:
+    gold = {"A", "B"}
+    assert citation_recall(["A"], gold) == 0.5
+    assert citation_recall([], gold) == 0.0
+    assert citation_recall(["A", "B"], gold) == 1.0
+
+
+def test_citation_recall_requires_gold() -> None:
+    with pytest.raises(ValueError, match="undefined"):
+        citation_recall(["A"], [])
 
 
 def test_citation_precision() -> None:

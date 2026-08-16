@@ -139,7 +139,7 @@ def _answer_metrics(results: list[QuestionResult]) -> dict[str, float]:
     perfect retrieval followed by a fabricated answer scores well above and
     badly below, and averaging the two would hide it.
     """
-    from kora.eval.metrics import abstention_scores, citation_precision
+    from kora.eval.metrics import abstention_scores, citation_precision, citation_recall
 
     answered = [r for r in results if r.answer is not None]
     if not answered:
@@ -158,6 +158,12 @@ def _answer_metrics(results: list[QuestionResult]) -> dict[str, float]:
     # measure nothing, since a correct abstention cites nothing by design.
     citing = [r for r in answered if r.gold and not r.abstained]
     if citing:
+        # Recall first: it is the metric that tracks legal correctness.
+        # Precision is reported beside it, and read with the knowledge that a
+        # correct supplementary citation lowers it.
+        metrics["citation_recall"] = sum(citation_recall(r.cited, r.gold) for r in citing) / len(
+            citing
+        )
         metrics["citation_precision"] = sum(
             citation_precision(r.cited, r.gold) for r in citing
         ) / len(citing)
@@ -205,7 +211,16 @@ def run_retrieval_experiment(
     # The first question also pays for lazily loading the encoder and reranker,
     # so it is run once and discarded before timing begins.
     if questions:
-        retriever.retrieve(questions[0].question, config.retrieval.top_k)
+        warmup_hits = retriever.retrieve(questions[0].question, config.retrieval.top_k)
+        if generator is not None:
+            # The generator loads lazily, so without this the first question
+            # pays for loading -- or, on a cold cache, downloading -- several
+            # gigabytes of weights inside a timed block. The first smoke test
+            # reported an 782-second p90 for exactly this reason.
+            generator.answer(
+                questions[0].question,
+                [h.article for h in warmup_hits[: config.retrieval.final_k]],
+            )
 
     results: list[QuestionResult] = []
     for question in questions:
@@ -269,6 +284,10 @@ def run_retrieval_experiment(
         report["answers"] = _answer_metrics(results)
         report["answers_headline"] = _answer_metrics(headline)
 
+    # Recorded in the metrics file as well as the directory name, so a results
+    # file read on its own still says how many questions stand behind it.
+    report["questions_evaluated"] = len(questions)
+
     if not headline:
         report["warning"] = (
             "No validated questions: headline metrics are empty. Numbers under "
@@ -283,9 +302,17 @@ def write_run(
     config: ExperimentConfig,
     report: dict[str, Any],
     results: list[QuestionResult],
+    *,
+    suffix: str = "",
 ) -> str:
-    """Persist a run's config, metrics and per-question predictions."""
-    directory = run_path(config.run_id)
+    """Persist a run's config, metrics and per-question predictions.
+
+    `suffix` distinguishes runs that share a config but not an evaluation --
+    a smoke test over five questions produces the same `run_id` as the full
+    sweep, and would otherwise overwrite it. The fingerprint describes the
+    system; it cannot describe how much of the gold set was used.
+    """
+    directory = run_path(config.run_id + suffix)
     directory.mkdir(parents=True, exist_ok=True)
 
     save_resolved(config, directory / "config.resolved.yaml")

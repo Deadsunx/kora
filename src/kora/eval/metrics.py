@@ -138,6 +138,26 @@ def hit_rate(retrieved: Sequence[str], gold: Iterable[str], k: int) -> float:
 # ---------------------------------------------------------------------------
 
 
+def citation_recall(cited: Iterable[str], gold: Iterable[str]) -> float:
+    """Fraction of the gold articles the answer actually cited.
+
+    The primary citation metric, for the same reason recall leads on the
+    retrieval side: failing to cite a governing provision is a legal error,
+    while citing an additional relevant one is not.
+
+    This distinction was not theoretical. Reading the first generated answers
+    showed the model citing article 24 *and* article 25 on the seat of a
+    company, or article 65 *and* article 387 on minimum capital -- in both
+    cases a correct supplementary citation that precision alone scored as a
+    mistake, because the gold set records the minimum articles needed rather
+    than the only ones it is legitimate to cite.
+    """
+    gold_set = set(gold)
+    if not gold_set:
+        raise ValueError("citation recall is undefined with no gold articles")
+    return sum(1 for chunk_id in gold_set if chunk_id in set(cited)) / len(gold_set)
+
+
 def citation_precision(cited: Iterable[str], gold: Iterable[str]) -> float:
     """Fraction of the answer's citations that are correct.
 

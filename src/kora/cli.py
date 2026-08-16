@@ -739,7 +739,10 @@ def eval_run(
     report, results = run_retrieval_experiment(
         cfg, gold, retriever, corpus_size=len(articles), generator=generator
     )
-    destination = write_run(cfg, report, results)
+    # A limited run evaluates a different thing from the full sweep, so it must
+    # not land on the full sweep's results. The config hash cannot express this:
+    # it describes the system, not how much of the gold set was used.
+    destination = write_run(cfg, report, results, suffix=f"-limit{limit}" if limit else "")
 
     console.print(f"\n[bold]{cfg.name}[/]  [dim]{cfg.run_id}[/]  [cyan]{describe(cfg)}[/]")
 
