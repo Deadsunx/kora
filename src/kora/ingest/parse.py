@@ -113,6 +113,11 @@ MAX_RUBRIC_CHARS = 160
 # structurally a TOC artefact regardless of what else is on it.
 DOT_LEADER_RE = re.compile(r"\.{4,}")
 
+# A repealed article is printed as its heading followed by nothing but the word
+# "Abroge". Matched against the whole body, so an article merely *discussing*
+# abrogation is untouched.
+REPEALED_BODY_RE = re.compile(r"^abrog[ée]{1,2}e?s?\s*\.?$", re.IGNORECASE)
+
 # Page numbering ("page 3 / 217", "- 14 -", a bare numeral on its own line).
 # Frequency-based furniture detection cannot catch these: the text differs on
 # every page, so no line repeats often enough to be recognised. Found by
@@ -253,6 +258,7 @@ def articles_from_lines(
                     number=current_number,
                     rubric=current_rubric,
                     text=body,
+                    repealed=bool(REPEALED_BODY_RE.match(body)),
                     hierarchy=current_hierarchy,
                     page_start=current_start,
                     page_end=current_end,
@@ -294,10 +300,23 @@ def articles_from_lines(
 
             previous = lines[index - 1][0] if index > 0 else ""
             current_rubric = previous if _is_rubric(previous) else ""
-            # The rubric belongs to the heading, not to the previous article.
+            # The rubric belongs to the heading, not to the previous article --
+            # but only reclaim it when the previous article survives losing it.
+            #
+            # The case that forced this: a repealed article is printed as its
+            # heading followed by the single word "Abroge". That word looks
+            # exactly like a marginal title, so it was stolen and attached to
+            # the *next* article, destroying the repealed article's only content
+            # and making a perfectly valid article appear repealed. Both errors
+            # at once, from one heuristic.
             if current_rubric and articles and articles[-1].text.endswith(current_rubric):
                 trimmed = articles[-1].text[: -len(current_rubric)].strip()
-                articles[-1] = articles[-1].model_copy(update={"text": trimmed})
+                if trimmed:
+                    articles[-1] = articles[-1].model_copy(update={"text": trimmed})
+                else:
+                    # The candidate rubric was the previous article's whole body.
+                    # It is content, not a title.
+                    current_rubric = ""
 
             current_number = number
             current_body = [trailing] if trailing else []

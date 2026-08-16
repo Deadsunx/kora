@@ -359,6 +359,108 @@ def test_longest_article_flags_merged_text() -> None:
     assert normal.longest_article_chars == len("corps")
 
 
+# -- repealed articles ------------------------------------------------------
+#
+# A repealed article prints as its heading followed by the single word
+# "Abroge". That word is short, has no terminal full stop and is not a
+# structural marker -- so the rubric heuristic classified it as a marginal
+# title, stole it from the repealed article, and attached it to the next one.
+# Two errors from one heuristic: the repealed article lost its only content,
+# and a valid article was made to look repealed.
+
+
+def test_repealed_article_keeps_its_body() -> None:
+    articles = articles_from_lines(
+        as_lines(
+            """
+            Article 12
+            Abrogé
+            Article 13
+            Les petites entites sont assujetties au systeme minimal de tresorerie.
+            """
+        ),
+        DOC,
+    )
+    assert [a.number for a in articles] == ["12", "13"]
+    assert articles[0].text == "Abrogé"
+    assert articles[0].repealed is True
+
+
+def test_the_following_article_is_not_marked_repealed() -> None:
+    articles = articles_from_lines(
+        as_lines(
+            """
+            Article 12
+            Abrogé
+            Article 13
+            Les petites entites sont assujetties au systeme minimal de tresorerie.
+            """
+        ),
+        DOC,
+    )
+    assert articles[1].repealed is False
+    assert articles[1].rubric == "", "the repealed marker must not become the next rubric"
+    assert articles[1].text.startswith("Les petites entites")
+
+
+@pytest.mark.parametrize("marker", ["Abrogé", "abrogé", "Abrogée", "Abrogés", "Abrogé."])
+def test_repeal_marker_variants(marker: str) -> None:
+    articles = articles_from_lines(
+        as_lines(f"Article 27\n{marker}\nArticle 28\nCorps reel de l'article."),
+        DOC,
+    )
+    assert articles[0].repealed is True
+    assert articles[1].repealed is False
+
+
+def test_article_discussing_abrogation_is_not_marked_repealed() -> None:
+    """Matched against the whole body, so ordinary prose is untouched."""
+    articles = articles_from_lines(
+        as_lines(
+            """
+            Article 112
+            Sont abrogées à compter de la date d'entree en vigueur du present Acte
+            uniforme les dispositions de l'Acte uniforme du 24 mars 2000.
+            """
+        ),
+        DOC,
+    )
+    assert articles[0].repealed is False
+
+
+def test_genuine_rubric_is_still_reclaimed() -> None:
+    """The fix must not disable rubric capture where it was working."""
+    articles = articles_from_lines(
+        as_lines(
+            """
+            Article 476
+            Corps du premier article, assez long pour survivre au retrait.
+            Nomination du president
+            Article 477
+            Le conseil designe un president.
+            """
+        ),
+        DOC,
+    )
+    assert articles[1].rubric == "Nomination du president"
+    assert articles[0].text.endswith("au retrait.")
+    assert "Nomination" not in articles[0].text
+
+
+def test_repealed_articles_are_flagged_in_indexed_text() -> None:
+    article = Article(
+        document_id="AUDCIF-2017",
+        abbrev="AUDCIF",
+        status="in_force",
+        number="12",
+        text="Abrogé",
+        repealed=True,
+        page_start=0,
+        page_end=0,
+    )
+    assert "ABROGÉ" in article.to_indexed_text()
+
+
 # -- hierarchy --------------------------------------------------------------
 
 

@@ -37,6 +37,15 @@ class Article(BaseModel):
     page_start: int = Field(..., ge=0)
     page_end: int = Field(..., ge=0)
 
+    # Repealed individually, inside an act that is otherwise in force.
+    #
+    # Legal status is not only a property of documents. AUDCIF-2017 is in force,
+    # yet its articles 12, 27 and 60 are printed as the heading followed by the
+    # single word "Abroge". Reading status from the manifest alone would score a
+    # citation of one of those as perfectly safe, which is the same failure the
+    # document-level status field exists to prevent, one level down.
+    repealed: bool = False
+
     @property
     def citation(self) -> str:
         """Canonical short citation, e.g. 'article 477 AUSCGIE (2014)'."""
@@ -70,6 +79,10 @@ class Article(BaseModel):
         retriever match on 'article 477' directly.
         """
         parts = [self.citation]
+        # Stated in the indexed text, not only in metadata, so the marker
+        # survives into whatever context window the generator sees.
+        if self.repealed or self.status == "superseded":
+            parts.append("[TEXTE ABROGÉ — ne pas citer comme droit en vigueur]")
         if self.hierarchy:
             parts.append(" > ".join(self.hierarchy))
         if self.rubric:
@@ -100,6 +113,11 @@ class ParsedDocument(BaseModel):
 
     def __len__(self) -> int:
         return len(self.articles)
+
+    @property
+    def repealed_articles(self) -> tuple[str, ...]:
+        """Numbers of articles repealed individually within this act."""
+        return tuple(a.number for a in self.articles if a.repealed)
 
     @property
     def longest_article_chars(self) -> int:

@@ -43,9 +43,12 @@ the 2023 revision inserted a large number of sub-articles (`1-10`, `28-1`,
 are working from different source PDFs. The comparison is meaningful, but it is
 a comparison of extractions, not a scoreboard.
 
-## Three parser defects found, and how
+## Five parser defects found, and how
 
-Each was found by a different mechanism. That is the argument for having several.
+Each was found by a *different* mechanism — the numbering invariant, the length
+distribution, a unit test, a manual spot-check, and building the gold question
+set. None of them caught what another caught. That is the whole argument for
+having several, and for reading output by hand as well as by metric.
 
 **1. Table-of-contents contamination — found by the length distribution.**
 
@@ -85,7 +88,46 @@ check reported exactly one missing number — article 1 — which was the visibl
 tip of 17 lost articles. Fixing it took AUPSRVE from 431 articles at 92.7%
 coverage to 448 at 98.4%.
 
-**3. Short-page furniture detection — found by a unit test.**
+**3. Repealed articles destroyed by the rubric heuristic — found while building
+the gold question set.**
+
+A repealed article is printed as its heading followed by the single word
+`Abrogé`:
+
+```
+Article 12
+Abrogé
+Article 13
+Les petites entités sont assujetties, sauf option, au Système minimal…
+```
+
+That word is short, carries no terminal full stop and is not a structural
+marker — so the rubric heuristic classified it as a marginal title belonging to
+the *next* heading, stole it from article 12, and attached it to article 13.
+Two errors from one heuristic: **article 12 lost its only content and was left
+empty, while article 13 — perfectly in force — was made to look repealed.**
+
+Three articles were affected in AUDCIF (12, 27, 60), and they were visible the
+whole time as the three zero-length bodies in the length distribution. They were
+noticed but not chased.
+
+The fix is narrow: a candidate rubric is only reclaimed from the previous
+article when that article survives losing it. If removing it would leave an
+empty body, it was content, not a title.
+
+This also produced a wrong claim in an earlier version of this document, which
+named articles 13, 28 and 61 as the repealed ones. That was the corrupted parser
+output being read as ground truth. The repealed articles are **12, 27 and 60**.
+
+**Article-level legal status.** The same fix added a `repealed` flag on
+`Article`. Status is not only a property of documents: AUDCIF-2017 is in force
+while three of its articles are not, so reading status from the manifest alone
+would score a citation of article 12 as perfectly safe. Repealed articles now
+carry an explicit `[TEXTE ABROGÉ]` marker into their indexed text, so the
+warning reaches the generator's context window rather than living only in
+metadata.
+
+**4. Short-page furniture detection — found by a unit test.**
 
 Header/footer detection sampled the first and last three lines of each page,
 which on a short page is every line, letting body text be deleted as furniture.

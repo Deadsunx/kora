@@ -332,19 +332,20 @@ def corpus_parse(
     table.add_column("gaps", justify="right")
     table.add_column("coverage", justify="right")
     table.add_column("rubrics", justify="right")
-    table.add_column("hierarchy", justify="right")
+    table.add_column("hier", justify="right")
+    table.add_column("abrogés", justify="right")
     table.add_column("status")
 
     parsed_any = False
     for document in targets:
         pdf_path = manifest.raw_path(document)
         if not pdf_path.exists():
-            table.add_row(document.id, *["-"] * 5, "[yellow]not downloaded[/]")
+            table.add_row(document.id, *["-"] * 6, "[yellow]not downloaded[/]")
             continue
         try:
             parsed = parse_pdf(pdf_path, document)
         except ParseError as exc:
-            table.add_row(document.id, *["-"] * 5, f"[red]{exc}[/]")
+            table.add_row(document.id, *["-"] * 6, f"[red]{exc}[/]")
             continue
 
         gaps = parsed.numbering_gaps()
@@ -360,6 +361,7 @@ def corpus_parse(
             f"[green]{coverage:.1%}[/]" if coverage > 0.9 else f"[yellow]{coverage:.1%}[/]",
             f"{rubrics * 100 // total}%",
             f"{placed * 100 // total}%",
+            str(len(parsed.repealed_articles)) if parsed.repealed_articles else "-",
             "[green]ok[/]" if not gaps and coverage > 0.9 else "[yellow]check[/]",
         )
 
