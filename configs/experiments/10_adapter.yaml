@@ -1,0 +1,28 @@
+# The fine-tuned adapter, evaluated against 07_rerank_fast.
+#
+# Identical in every respect except generator.adapter_path, so any difference is
+# attributable to the adapter and nothing else: same index, same retriever, same
+# reranker settings, same prompt, same greedy decoding, same gold set.
+#
+# The hypothesis was recorded in docs/generation-baseline.md before training:
+# little or no gain on the contract metrics, a large reduction in answer length
+# and therefore latency, and a risk that conciseness costs citation recall.
+
+extends: ../base.yaml
+
+name: adapter-r16
+description: Dense + reranking with the contract-r16 QLoRA adapter.
+
+retrieval:
+  bm25: false
+  top_k: 20
+  final_k: 5
+
+reranker:
+  enabled: true
+  batch_size: 32
+  max_length: 512
+  precision: fp16
+
+generator:
+  adapter_path: models/contract-r16-f96a57d4c027/adapter
