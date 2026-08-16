@@ -92,10 +92,11 @@ def doctor() -> None:
     for module, extra in [
         ("sentence_transformers", "retrieval"),
         ("faiss", "retrieval"),
-        ("transformers", "train"),
-        ("peft", "train"),
-        ("bitsandbytes", "train"),
+        ("transformers", "generate"),
+        ("peft", "generate"),
+        ("bitsandbytes", "generate"),
         ("fastapi", "serve"),
+        ("sse_starlette", "serve"),
     ]:
         try:
             mod = __import__(module)
@@ -886,6 +887,129 @@ def train_run(
         "\nEvaluate it by pointing an experiment at it:\n"
         f"  [dim]generator.adapter_path: {adapter}[/]"
     )
+
+
+serve_app = typer.Typer(help="HTTP service and serving benchmarks.", no_args_is_help=True)
+app.add_typer(serve_app, name="serve")
+
+
+@serve_app.command("start")
+def serve_start(
+    config: Path = typer.Option(
+        Path("configs/experiments/07_rerank_fast.yaml"), "--config", "-c", exists=True
+    ),
+    host: str = typer.Option("127.0.0.1", help="Bind address. Use 0.0.0.0 in a container."),
+    port: int = typer.Option(8000),
+    preload: bool = typer.Option(True, help="Load the generator at startup, not on first request."),
+) -> None:
+    """Serve one experiment over HTTP, with a streaming UI at /.
+
+    The config is passed through the environment rather than to the app factory,
+    because uvicorn imports the module itself. It is also the reason the served
+    config cannot be a request parameter: the service has one identity, and
+    /health reports it.
+    """
+    import os
+
+    import uvicorn
+
+    from kora.config import load_config
+
+    cfg = load_config(config)
+    os.environ["KORA_CONFIG"] = str(config.resolve())
+    os.environ["KORA_PRELOAD"] = "1" if preload else "0"
+
+    table = Table(show_header=False, box=None)
+    table.add_row("[bold]serving[/]", f"{cfg.name}  [dim]{cfg.run_id}[/]")
+    table.add_row("[bold]index[/]", cfg.index_fingerprint())
+    table.add_row("[bold]generator[/]", cfg.generator.model_name)
+    if cfg.generator.adapter_path:
+        table.add_row("[bold]adapter[/]", cfg.generator.adapter_path)
+    table.add_row("[bold]url[/]", f"http://{host}:{port}")
+    console.print(table)
+    if preload:
+        console.print("\n[dim]Loading models before accepting requests…[/]")
+
+    uvicorn.run("kora.serving.app:app", host=host, port=port, log_level="info")
+
+
+@serve_app.command("bench")
+def serve_bench(
+    url: str = typer.Option("http://127.0.0.1:8000", "--url", help="A running kora service."),
+    repeats: int = typer.Option(2, help="Times through the question list per wave."),
+    concurrency: list[int] = typer.Option([1, 2, 4], "--concurrency", help="Levels to test."),
+    out: Path = typer.Option(None, "--out", help="Where to write the report."),
+) -> None:
+    """Measure time-to-first-token, total latency and behaviour under concurrency."""
+    import json
+
+    from kora.serving.bench import run_benchmark
+
+    try:
+        report = run_benchmark(
+            url, repeats=repeats, concurrencies=tuple(concurrency), timeout=300.0
+        )
+    except Exception as exc:
+        console.print(f"[red]Benchmark failed:[/] {exc}\n[dim]Is `kora serve start` running?[/]")
+        raise typer.Exit(1) from exc
+
+    generation = Table(title="Generation (/ask/stream)")
+    generation.add_column("concurrency", style="bold")
+    generation.add_column("n", justify="right")
+    generation.add_column("first token", justify="right")
+    generation.add_column("total median", justify="right")
+    generation.add_column("total p90", justify="right")
+    generation.add_column("answers/min", justify="right")
+    for level, row in report["generation"].items():
+        generation.add_row(
+            level.lstrip("c"),
+            str(row.get("n", 0)),
+            f"{row.get('first_token_ms_median', 0) / 1000:.1f} s",
+            f"{row.get('total_ms_median', 0) / 1000:.1f} s",
+            f"{row.get('total_ms_p90', 0) / 1000:.1f} s",
+            f"{row.get('throughput_per_min', 0):.1f}",
+        )
+    console.print(generation)
+
+    retrieval = Table(title="Retrieval only (/search)")
+    retrieval.add_column("concurrency", style="bold")
+    retrieval.add_column("n", justify="right")
+    retrieval.add_column("median", justify="right")
+    retrieval.add_column("p90", justify="right")
+    retrieval.add_column("req/s", justify="right")
+    for level, row in report["retrieval"].items():
+        retrieval.add_row(
+            level.lstrip("c"),
+            str(row.get("n", 0)),
+            f"{row.get('total_ms_median', 0):.0f} ms",
+            f"{row.get('total_ms_p90', 0):.0f} ms",
+            f"{row.get('throughput_per_sec', 0):.1f}",
+        )
+    console.print(retrieval)
+
+    # Reported per concurrency level rather than only at c=1. The single-client
+    # figure is large and flattering, and it collapses under load because
+    # time-to-first-token becomes queue wait rather than prefill. Printing only
+    # the best row would be the serving equivalent of quoting a latency win from
+    # a model that stopped answering the question.
+    speedups = [
+        (level.lstrip("c"), row["perceived_speedup"])
+        for level, row in report["generation"].items()
+        if row.get("perceived_speedup")
+    ]
+    if speedups:
+        rendered = ", ".join(f"c={level} [bold]{value}x[/]" for level, value in speedups)
+        console.print(f"\nFirst token arrives sooner than the full answer by: {rendered}")
+        console.print(
+            "[dim]Streaming does not change total time. Under concurrency the first token\n"
+            "waits for the generation lock, so the gain shrinks as clients are added.[/]"
+        )
+
+    destination = out or paths.RUNS_DIR / f"serving-{report['health'].get('run_id', 'unknown')}"
+    destination.mkdir(parents=True, exist_ok=True)
+    path = destination / "bench.json"
+    path.write_text(json.dumps(report, indent=2, ensure_ascii=False), encoding="utf-8")
+    console.print(f"\nWritten to [dim]{path}[/]")
 
 
 def load_manifest_or_exit():

@@ -1,0 +1,22 @@
+# The corpus, indexes and model weights are mounted at runtime, not baked in.
+# Without this the build context is several gigabytes and the layer cache is
+# invalidated every time an index is rebuilt.
+data/
+models/
+runs/
+
+.venv/
+.git/
+.github/
+.mypy_cache/
+.pytest_cache/
+.ruff_cache/
+__pycache__/
+*.pyc
+*.egg-info/
+
+docs/
+tests/
+notebooks/
+*.md
+!README.md

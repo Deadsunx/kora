@@ -382,7 +382,7 @@
     <h1>Kora: a measured retrieval system for OHADA business law</h1>
     <p class="standfirst">
       Retrieval-augmented question answering over French-language African business
-      law. Four of its principal findings are negative — and the most useful one
+      law. Most of its principal findings are negative — and the most useful one
       was invisible to every metric in the harness.
     </p>
     <div class="colophon">
@@ -430,16 +430,17 @@
     </p>
     <p>Those are the headline numbers. They are not the point of this report.</p>
     <p>
-      The point is that four of the project's principal findings are
+      The point is that most of the project's principal findings are
       <strong>negative</strong>: a well-motivated hypothesis about lexical search
       was refuted, a wider candidate pool made reranking worse, an accuracy gain
-      was very nearly written up as a speed optimisation, and a QLoRA fine-tune
-      that improved almost every metric made the system worse.
+      was very nearly written up as a speed optimisation, a QLoRA fine-tune that
+      improved almost every metric made the system worse, and the streaming
+      service's headline 18.9× speedup turned out to hold only for a single user.
     </p>
     <p>
-      Each was found by reading raw output, not by reading a dashboard. This
-      report is organised around <em>how</em> each was found, because that is the
-      transferable part.
+      Each was found by reading raw output, or by measuring a condition that was
+      not flattering. This report is organised around <em>how</em> each was
+      found, because that is the transferable part.
     </p>
   </section>
 
@@ -1111,6 +1112,91 @@ Les petites entités sont assujetties, sauf option, au Système minimal…</code
 
   <section>
     <div class="mark">§&nbsp;7</div>
+    <h2>Serving, and a fourth negative result</h2>
+    <p>
+      The system is served by FastAPI with server-sent events, a streaming UI,
+      and a Docker image. The service loads one <code>ExperimentConfig</code> and
+      builds the pipeline with the same <code>build_retriever</code> the
+      evaluation harness calls — there is no serving-only prompt or retrieval
+      setting, because a served system that could drift from the measured one
+      would make the ablation table describe nothing a user touches.
+      <code>/health</code> reports the run id and index fingerprint rather than
+      merely "ok", so the chain from output back to system survives the last
+      step.
+    </p>
+    <p>
+      Generation is serialised behind a lock. One GPU holds one generator, and
+      two concurrent 4-bit generations on 8 GiB contend for memory that is not
+      there — the failure mode is an OOM that takes the process down, not a slow
+      response.
+    </p>
+    <div class="tw">
+      <table>
+        <thead>
+          <tr>
+            <th class="n">Clients</th><th class="n">First token</th>
+            <th class="n">Total median</th><th class="n">Total p90</th>
+            <th class="n">Answers/min</th><th class="n">Wall</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr><td class="n">1</td><td class="n win">1.1 s</td><td class="n">20.1 s</td><td class="n">37.9 s</td><td class="n">2.68</td><td class="n">179 s</td></tr>
+          <tr><td class="n">2</td><td class="n">13.2 s</td><td class="n">39.5 s</td><td class="n">68.1 s</td><td class="n">2.83</td><td class="n">170 s</td></tr>
+          <tr><td class="n">4</td><td class="n loss">40.8 s</td><td class="n">69.5 s</td><td class="n">86.8 s</td><td class="n">2.83</td><td class="n">169 s</td></tr>
+        </tbody>
+        <caption>8 requests per wave. Identical work, identical wall clock, however many clients ask at once.</caption>
+      </table>
+    </div>
+
+    <h3>The queuing prediction held</h3>
+    <p>
+      Recorded in <code>bench.py</code> before the run: throughput stays flat
+      while latency rises roughly linearly with concurrency. Throughput is flat
+      to within 6%; latency rises 2.0× and 3.5× for 2× and 4× concurrency; and
+      the wall clock for the same eight answers is 179 s, 170 s, 169 s. Nothing
+      worse than queuing occurs — no OOM, no thrash, no superlinear collapse. The
+      lock converts a hardware limit into a predictable wait, which was the
+      entire justification for it.
+    </p>
+
+    <h3>The streaming headline is a single-user number<span class="tag neg">holds only at c=1</span></h3>
+    <div class="tw">
+      <table>
+        <thead>
+          <tr><th>Clients</th><th class="n">1</th><th class="n">2</th><th class="n">4</th></tr>
+        </thead>
+        <tbody>
+          <tr><td>Perceived speedup</td><td class="n win">18.9×</td><td class="n">3.0×</td><td class="n loss">1.7×</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <p>
+      At one client the first token arrives <strong>18.9× sooner</strong> than
+      the complete answer. At four it is <strong>1.7×</strong>, because under
+      load time-to-first-token stops being prefill and becomes
+      <em>waiting for the lock</em>.
+    </p>
+    <div class="note">
+      <p class="detector">Why all three rows are reported</p>
+      <p>
+        Quoting 18.9× alone would be a real measurement taken under the one
+        condition that flatters it — the serving equivalent of the §6 mistake.
+        The benchmark prints every concurrency level for that reason.
+      </p>
+    </div>
+    <p>
+      Two supporting results. <code>/search</code> throughput nearly doubles from
+      c=1 to c=2 (1.8 → 3.0 req/s) where generation's does not move at all — that
+      contrast is the control that makes flat generation throughput attributable
+      to the lock rather than to a saturated GPU. And retrieval measures
+      <strong>200 ms</strong> over HTTP against the <strong>193 ms</strong> §5
+      recorded in-process, so the ablation table's latencies survive contact with
+      a network client.
+    </p>
+  </section>
+
+  <section>
+    <div class="mark">§&nbsp;8</div>
     <h2>What this project demonstrates</h2>
     <p>Stated as claims, each with the evidence behind it.</p>
     <p>
@@ -1120,8 +1206,17 @@ Les petites entités sont assujetties, sauf option, au Système minimal…</code
     </p>
     <p>
       <strong>That the interesting results here are negative.</strong> BM25 refuted
-      three ways, a wider pool that hurt, a fine-tune that regressed. All three
-      were plausible enough to have been shipped on intuition.
+      three ways, a wider pool that hurt, a fine-tune that regressed, a streaming
+      speedup that held only for one user. All four were plausible enough to have
+      been shipped on intuition.
+    </p>
+    <p>
+      <strong>That the system is served, and served as the thing that was
+      measured.</strong> FastAPI with SSE, a streaming UI, a Docker image, and an
+      API whose response carries the same contract the harness scores — including
+      a per-response fabrication check. <code>/health</code> reports the run id,
+      so an output can still be traced to the system that produced it after it
+      leaves the harness.
     </p>
     <p>
       <strong>That measurement infrastructure has to be doubted too.</strong> Two
@@ -1146,7 +1241,7 @@ Les petites entités sont assujetties, sauf option, au Système minimal…</code
   </section>
 
   <section>
-    <div class="mark">§&nbsp;8</div>
+    <div class="mark">§&nbsp;9</div>
     <h2>Limits</h2>
     <p>
       Stated because a results table that names its own limits is worth more than
@@ -1195,7 +1290,7 @@ Les petites entités sont assujetties, sauf option, au Système minimal…</code
   </section>
 
   <section>
-    <div class="mark">§&nbsp;9</div>
+    <div class="mark">§&nbsp;10</div>
     <h2>What would come next</h2>
     <p>
       <strong>Fix <code>cross_act</code> properly.</strong> Rebuild it from real
@@ -1226,6 +1321,7 @@ Les petites entités sont assujetties, sauf option, au Système minimal…</code
   <footer>
     Every number reproduces from a config file ·
     <code>kora eval run -c configs/experiments/07_rerank_fast.yaml</code><br>
+    Serve the same system · <code>kora serve start -c configs/experiments/07_rerank_fast.yaml</code><br>
     Corpus: Actes uniformes OHADA, not redistributed · MIT for the code
   </footer>
 

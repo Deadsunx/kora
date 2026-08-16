@@ -1,0 +1,164 @@
+{
+  "base_url": "http://127.0.0.1:8000",
+  "health": {
+    "status": "ok",
+    "run_id": "rerank-fast-54cefb1da669",
+    "config_name": "rerank-fast",
+    "pipeline": "dense + rerank",
+    "index_fingerprint": "32e88149561b",
+    "corpus_size": 3056,
+    "generator_model": "Qwen/Qwen3-4B-Instruct-2507",
+    "adapter": null,
+    "generator_loaded": true
+  },
+  "requests_per_wave": 8,
+  "generation": {
+    "c1": {
+      "n": 8,
+      "failures": 0,
+      "total_ms_median": 20081.1,
+      "total_ms_p90": 37949.9,
+      "first_token_ms_median": 1063.3,
+      "first_token_ms_p90": 1574.8,
+      "perceived_speedup": 18.9,
+      "passages_ms_median": 252.5,
+      "answer_chars_median": 416,
+      "wall_seconds": 179.0,
+      "throughput_per_min": 2.68
+    },
+    "c2": {
+      "n": 8,
+      "failures": 0,
+      "total_ms_median": 39485.8,
+      "total_ms_p90": 68083.8,
+      "first_token_ms_median": 13157.5,
+      "first_token_ms_p90": 40254.8,
+      "perceived_speedup": 3.0,
+      "passages_ms_median": 464.8,
+      "answer_chars_median": 416,
+      "wall_seconds": 169.7,
+      "throughput_per_min": 2.83
+    },
+    "c4": {
+      "n": 8,
+      "failures": 0,
+      "total_ms_median": 69496.5,
+      "total_ms_p90": 86760.1,
+      "first_token_ms_median": 40844.8,
+      "first_token_ms_p90": 75773.9,
+      "perceived_speedup": 1.7,
+      "passages_ms_median": 636.1,
+      "answer_chars_median": 416,
+      "wall_seconds": 169.4,
+      "throughput_per_min": 2.83
+    }
+  },
+  "retrieval": {
+    "c1": {
+      "n": 8,
+      "failures": 0,
+      "total_ms_median": 200.3,
+      "total_ms_p90": 250.9,
+      "wall_seconds": 4.39,
+      "throughput_per_sec": 1.8
+    },
+    "c2": {
+      "n": 8,
+      "failures": 0,
+      "total_ms_median": 208.3,
+      "total_ms_p90": 330.1,
+      "wall_seconds": 2.71,
+      "throughput_per_sec": 3.0
+    },
+    "c4": {
+      "n": 8,
+      "failures": 0,
+      "total_ms_median": 447.3,
+      "total_ms_p90": 715.4,
+      "wall_seconds": 2.27,
+      "throughput_per_sec": 3.5
+    }
+  },
+  "samples": [
+    {
+      "question": "Quelle est la durée maximale de vie d'une société commerciale ?",
+      "ok": true,
+      "total_ms": 715.4082999986713,
+      "first_token_ms": null,
+      "retrieval_ms": 692.77,
+      "passages_ms": null,
+      "generated_chars": 0,
+      "error": ""
+    },
+    {
+      "question": "Qu'est-ce qu'une hypothèque ?",
+      "ok": true,
+      "total_ms": 565.5747999990126,
+      "first_token_ms": null,
+      "retrieval_ms": 538.51,
+      "passages_ms": null,
+      "generated_chars": 0,
+      "error": ""
+    },
+    {
+      "question": "Quel est le capital social minimum d'une société anonyme ?",
+      "ok": true,
+      "total_ms": 370.45869999565184,
+      "first_token_ms": null,
+      "retrieval_ms": 332.94,
+      "passages_ms": null,
+      "generated_chars": 0,
+      "error": ""
+    },
+    {
+      "question": "Quelle est la peine encourue pour abus de biens sociaux ?",
+      "ok": true,
+      "total_ms": 707.1821999998065,
+      "first_token_ms": null,
+      "retrieval_ms": 678.48,
+      "passages_ms": null,
+      "generated_chars": 0,
+      "error": ""
+    },
+    {
+      "question": "Quelle est la durée maximale de vie d'une société commerciale ?",
+      "ok": true,
+      "total_ms": 152.42059999582125,
+      "first_token_ms": null,
+      "retrieval_ms": 134.56,
+      "passages_ms": null,
+      "generated_chars": 0,
+      "error": ""
+    },
+    {
+      "question": "Qu'est-ce qu'une hypothèque ?",
+      "ok": true,
+      "total_ms": 220.21240000321995,
+      "first_token_ms": null,
+      "retrieval_ms": 205.25,
+      "passages_ms": null,
+      "generated_chars": 0,
+      "error": ""
+    },
+    {
+      "question": "Quel est le capital social minimum d'une société anonyme ?",
+      "ok": true,
+      "total_ms": 444.70279999950435,
+      "first_token_ms": null,
+      "retrieval_ms": 421.08,
+      "passages_ms": null,
+      "generated_chars": 0,
+      "error": ""
+    },
+    {
+      "question": "Quelle est la peine encourue pour abus de biens sociaux ?",
+      "ok": true,
+      "total_ms": 449.98770000529476,
+      "first_token_ms": null,
+      "retrieval_ms": 446.65,
+      "passages_ms": null,
+      "generated_chars": 0,
+      "error": ""
+    }
+  ]
+}

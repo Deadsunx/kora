@@ -1,6 +1,6 @@
 # Kora: a measured retrieval system for French-language African business law
 
-Technical report · 2026-08-16 · 3,056 articles · 59 validated questions · 12
+Technical report · August 2026 · 3,056 articles · 59 validated questions · 12
 recorded runs · one RTX 4070 Laptop, 8 GiB
 
 ---
@@ -15,12 +15,14 @@ law, and correctly decline 7 of 8 unanswerable questions.
 
 Those are the headline numbers. They are not the point of this report.
 
-The point is that four of the project's principal findings are **negative**: a
+The point is that most of the project's principal findings are **negative**: a
 well-motivated hypothesis about lexical search was refuted, a wider candidate
 pool made reranking worse, an accuracy gain was very nearly written up as a
-speed optimisation, and a QLoRA fine-tune that improved almost every metric made
-the system worse. Each was found by reading raw output, not by reading a
-dashboard. The last one was invisible to every metric in the harness.
+speed optimisation, a QLoRA fine-tune that improved almost every metric made the
+system worse, and the streaming service's headline 18.9× speedup turned out to
+hold only for a single user. Each was found by reading raw output or by
+measuring a condition that was not flattering. The fine-tune was invisible to
+every metric in the harness.
 
 This report is organised around how each was found, because that is the
 transferable part.
@@ -37,7 +39,7 @@ OHADA law is a good place to check:
 - **It is legal French.** Dense encoders trained mainly on English web text blur
   precisely the tokens that carry meaning here — article numbers, fixed terms of
   art like *société anonyme* or *sûreté mobilière*, cross-references between
-  acts. That is a testable claim, and §4 tests it.
+  acts. That is a testable claim, and §5 tests it.
 - **It is highly structured.** Livre → Titre → Chapitre → Article, with
   contiguous article numbering. That structure is both a gift for chunking and a
   free correctness invariant: a gap in the numbering means a heading was
@@ -503,7 +505,53 @@ A silent failure that produces a plausible number is worse than a crash.
 
 ---
 
-## 7. What this project demonstrates
+## 7. Serving, and a fourth negative result
+
+The system is served by FastAPI with server-sent events, a streaming UI, and a
+Docker image. The service loads one `ExperimentConfig` and builds the pipeline
+with the same `build_retriever` the evaluation harness calls — there is no
+serving-only prompt or retrieval setting, because a served system that could
+drift from the measured one would make the ablation table describe nothing a
+user touches. `/health` reports the run id and index fingerprint rather than
+merely "ok", so the chain from output back to system survives the last step.
+
+Generation is serialised behind a lock. One GPU holds one generator, and two
+concurrent 4-bit generations on 8 GiB contend for memory that is not there — the
+failure mode is an OOM that takes the process down, not a slow response.
+
+| concurrency | first token | total median | total p90 | answers/min | wall |
+|---:|---:|---:|---:|---:|---:|
+| 1 | **1.1 s** | 20.1 s | 37.9 s | 2.68 | 179 s |
+| 2 | 13.2 s | 39.5 s | 68.1 s | 2.83 | 170 s |
+| 4 | 40.8 s | 69.5 s | 86.8 s | 2.83 | 169 s |
+
+**The queuing prediction, recorded in `bench.py` before the run, held.**
+Throughput is flat to within 6%; latency rises 2.0× and 3.5× for 2× and 4×
+concurrency; and the wall clock for the same eight answers is 179 s, 170 s,
+169 s. Identical work in identical time however many clients ask at once, which
+is what a serialised resource means. Nothing worse than queuing occurs.
+
+**And the headline streaming number is a single-user number.** At one client the
+first token arrives 18.9× sooner than the complete answer. At two clients that
+is 3.0×, at four it is 1.7× — because under load, time-to-first-token stops
+being prefill and becomes *waiting for the lock*.
+
+| concurrency | 1 | 2 | 4 |
+|---|---:|---:|---:|
+| perceived speedup | **18.9×** | 3.0× | **1.7×** |
+
+Quoting 18.9× alone would have been the serving equivalent of Phase 6's own
+version of the §6 mistake: a real measurement, taken under the one condition
+that flatters it. The benchmark reports all three rows for that reason.
+
+Two supporting results. `/search` throughput nearly doubles from c=1 to c=2
+(1.8 → 3.0 req/s) where generation's does not move at all — that contrast is the
+control that makes flat generation throughput attributable to the lock rather
+than to a saturated GPU. And retrieval measures **200 ms** over HTTP against the
+**193 ms** §5 recorded in-process, so the ablation table's latencies survive
+contact with a network client.
+
+## 8. What this project demonstrates
 
 Stated as claims, each with the evidence behind it:
 
@@ -512,8 +560,15 @@ baseline, pre-registered hypotheses, and 12 runs each traceable to the exact
 system that produced it.
 
 **That the interesting results here are negative.** BM25 refuted three ways, a
-wider pool that hurt, a fine-tune that regressed. All three were plausible enough
-to have been shipped on intuition.
+wider pool that hurt, a fine-tune that regressed, a streaming speedup that held
+only for one user. All four were plausible enough to have been shipped on
+intuition.
+
+**That the system is served, and served as the thing that was measured.**
+FastAPI with SSE, a streaming UI, a Docker image, and an API whose response
+carries the same contract the harness scores — including a per-response
+fabrication check. `/health` reports the run id, so an output can still be traced
+to the system that produced it after it leaves the harness.
 
 **That measurement infrastructure has to be doubted too.** Two metrics were
 wrong before the systems they scored were: `citation_precision` penalised correct
@@ -532,7 +587,7 @@ about where legal meaning lives.
 
 ---
 
-## 8. Limits
+## 9. Limits
 
 Stated because a results table that names its own limits is worth more than one
 that does not.
@@ -557,7 +612,7 @@ that does not.
 - **SYCEBNL-2022 is a scan** and was refused rather than parsed. Seven repealed
   acts remain unsourced.
 
-## 9. What would come next
+## 10. What would come next
 
 **Fix `cross_act` properly.** Rebuild it from real inter-act textual
 cross-references, which is the only way to make the weakest row in the table
@@ -596,3 +651,4 @@ resolved config beside them.
 | [`ablations.md`](ablations.md) | retrieval ablations (§5) |
 | [`generation-baseline.md`](generation-baseline.md) | generation + hypothesis (§6) |
 | [`fine-tuning-results.md`](fine-tuning-results.md) | the adapter regression (§6) |
+| [`serving.md`](serving.md) | API, streaming, Docker, benchmarks (§7) |

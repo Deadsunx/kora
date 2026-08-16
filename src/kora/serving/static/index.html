@@ -1,0 +1,497 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Kora — droit OHADA</title>
+<style>
+  :root {
+    --paper:      #F5F5F2;
+    --surface:    #FFFFFF;
+    --sunk:       #EDEDE8;
+    --ink:        #16181C;
+    --ink-soft:   #4E535C;
+    --ink-faint:  #83888F;
+    --rule:       #DCDCD5;
+    --rule-firm:  #C3C4BC;
+    --madder:     #A02B34;
+    --madder-bg:  #F6E7E7;
+    --teal:       #1B5E52;
+    --teal-bg:    #E2EDE9;
+    --amber:      #8A5A0B;
+    --amber-bg:   #F6ECD9;
+    --serif: "Iowan Old Style", "Palatino Linotype", "Book Antiqua", Palatino, Georgia, serif;
+    --mono: ui-monospace, "SF Mono", "Cascadia Mono", Consolas, monospace;
+  }
+
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --paper:      #15171B;
+      --surface:    #1B1E23;
+      --sunk:       #22262D;
+      --ink:        #E7E7E1;
+      --ink-soft:   #A5AAB2;
+      --ink-faint:  #767C85;
+      --rule:       #2C3038;
+      --rule-firm:  #3E434C;
+      --madder:     #E0797F;
+      --madder-bg:  #2E1D20;
+      --teal:       #6FC0AC;
+      --teal-bg:    #18302B;
+      --amber:      #D9A94E;
+      --amber-bg:   #2C2515;
+    }
+  }
+
+  * { box-sizing: border-box; }
+
+  body {
+    margin: 0;
+    background: var(--paper);
+    color: var(--ink);
+    font-family: var(--serif);
+    font-size: 16px;
+    line-height: 1.6;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  .label {
+    font-family: var(--mono);
+    font-size: 0.6875rem;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: var(--ink-faint);
+  }
+
+  /* ---- header ---- */
+
+  header {
+    border-bottom: 1px solid var(--rule-firm);
+    background: var(--surface);
+    padding: 0.9rem 1.5rem;
+    display: flex;
+    align-items: baseline;
+    gap: 1rem;
+    flex-wrap: wrap;
+  }
+  .brand { font-size: 1.15rem; font-weight: 600; letter-spacing: -0.01em; }
+  .brand span { color: var(--madder); }
+  .tagline { color: var(--ink-soft); font-size: 0.9rem; }
+  #serving { margin-left: auto; text-align: right; line-height: 1.5; }
+
+  /* ---- layout ---- */
+
+  main {
+    max-width: 1180px;
+    margin: 0 auto;
+    padding: 2rem 1.5rem 5rem;
+    display: flex;
+    flex-direction: column;
+    gap: 1.75rem;
+  }
+
+  form { display: flex; gap: 0.6rem; flex-wrap: wrap; }
+  input[type="text"] {
+    flex: 1 1 22rem;
+    min-width: 0;
+    font-family: var(--serif);
+    font-size: 1.02rem;
+    padding: 0.7rem 0.85rem;
+    color: var(--ink);
+    background: var(--surface);
+    border: 1px solid var(--rule-firm);
+    border-radius: 3px;
+  }
+  input[type="text"]:focus-visible,
+  button:focus-visible { outline: 2px solid var(--madder); outline-offset: 2px; }
+
+  button {
+    font-family: var(--mono);
+    font-size: 0.75rem;
+    letter-spacing: 0.09em;
+    text-transform: uppercase;
+    padding: 0.7rem 1.15rem;
+    color: var(--paper);
+    background: var(--ink);
+    border: 1px solid var(--ink);
+    border-radius: 3px;
+    cursor: pointer;
+  }
+  button.ghost { background: transparent; color: var(--ink-soft); border-color: var(--rule-firm); }
+  button:disabled { opacity: 0.45; cursor: not-allowed; }
+
+  .examples { display: flex; gap: 0.5rem; flex-wrap: wrap; align-items: center; }
+  .chip {
+    font-family: var(--serif);
+    font-size: 0.875rem;
+    text-transform: none;
+    letter-spacing: 0;
+    padding: 0.3rem 0.7rem;
+    color: var(--ink-soft);
+    background: var(--sunk);
+    border: 1px solid var(--rule);
+    border-radius: 999px;
+    cursor: pointer;
+  }
+
+  .columns { display: grid; grid-template-columns: minmax(0, 1.15fr) minmax(0, 1fr); gap: 1.75rem; }
+  @media (max-width: 900px) { .columns { grid-template-columns: 1fr; } }
+
+  .panel {
+    background: var(--surface);
+    border: 1px solid var(--rule);
+    border-radius: 3px;
+    padding: 1.15rem 1.25rem 1.3rem;
+  }
+  .panel > .label { display: block; margin-bottom: 0.75rem; }
+
+  /* ---- answer ---- */
+
+  #answer { white-space: pre-wrap; min-height: 3rem; }
+  #answer:empty::after { content: "Posez une question pour commencer."; color: var(--ink-faint); }
+  #answer.declined { color: var(--amber); }
+
+  .verdict {
+    display: none;
+    gap: 0.4rem 0.9rem;
+    flex-wrap: wrap;
+    align-items: center;
+    margin-top: 1.1rem;
+    padding-top: 0.9rem;
+    border-top: 1px solid var(--rule);
+  }
+  .verdict.show { display: flex; }
+
+  .badge {
+    font-family: var(--mono);
+    font-size: 0.625rem;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    padding: 0.2em 0.55em;
+    border-radius: 2px;
+  }
+  .badge.ok   { background: var(--teal-bg);   color: var(--teal); }
+  .badge.warn { background: var(--amber-bg);  color: var(--amber); }
+  .badge.bad  { background: var(--madder-bg); color: var(--madder); }
+
+  .timings {
+    margin-left: auto;
+    font-family: var(--mono);
+    font-size: 0.6875rem;
+    color: var(--ink-faint);
+    font-variant-numeric: tabular-nums;
+  }
+
+  /* ---- passages ---- */
+
+  #passages { display: flex; flex-direction: column; gap: 0.75rem; }
+  #passages:empty::after {
+    content: "Les articles retrouvés apparaîtront ici, avant la réponse.";
+    color: var(--ink-faint);
+    font-size: 0.9rem;
+  }
+
+  .passage {
+    border: 1px solid var(--rule);
+    border-left: 3px solid var(--rule-firm);
+    border-radius: 2px;
+    padding: 0.75rem 0.9rem;
+    background: var(--paper);
+  }
+  .passage.cited { border-left-color: var(--teal); background: var(--teal-bg); }
+  .passage.unsafe { border-left-color: var(--madder); }
+
+  .passage-head {
+    display: flex;
+    align-items: baseline;
+    gap: 0.6rem;
+    flex-wrap: wrap;
+    margin-bottom: 0.4rem;
+  }
+  .passage-cite { font-weight: 600; font-size: 0.94rem; }
+  .passage-score {
+    margin-left: auto;
+    font-family: var(--mono);
+    font-size: 0.6875rem;
+    color: var(--ink-faint);
+    font-variant-numeric: tabular-nums;
+  }
+  .passage-rubric { font-size: 0.85rem; color: var(--ink-soft); font-style: italic; }
+  .passage-text {
+    font-size: 0.9rem;
+    line-height: 1.55;
+    color: var(--ink-soft);
+    max-height: 7.5rem;
+    overflow: hidden;
+    position: relative;
+    cursor: pointer;
+  }
+  .passage-text.open { max-height: none; }
+  .passage-text:not(.open)::after {
+    content: "";
+    position: absolute; inset: auto 0 0 0; height: 2.4rem;
+    background: linear-gradient(to bottom, transparent, var(--paper));
+  }
+  .passage.cited .passage-text:not(.open)::after {
+    background: linear-gradient(to bottom, transparent, var(--teal-bg));
+  }
+
+  .note {
+    font-size: 0.85rem;
+    color: var(--ink-soft);
+    border-top: 1px solid var(--rule);
+    padding-top: 0.9rem;
+    margin-top: 0.3rem;
+  }
+  .note b { color: var(--madder); font-weight: 600; }
+
+  .cursor {
+    display: inline-block;
+    width: 0.5ch;
+    background: var(--madder);
+    animation: blink 1.1s steps(2, start) infinite;
+  }
+  @keyframes blink { to { visibility: hidden; } }
+  @media (prefers-reduced-motion: reduce) { .cursor { animation: none; } }
+
+  footer {
+    max-width: 1180px;
+    margin: 0 auto;
+    padding: 0 1.5rem 3rem;
+    font-family: var(--mono);
+    font-size: 0.6875rem;
+    color: var(--ink-faint);
+    line-height: 1.8;
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="brand">Kora<span>.</span></div>
+  <div class="tagline">Questions-réponses sur les Actes uniformes OHADA</div>
+  <div id="serving" class="label">chargement…</div>
+</header>
+
+<main>
+  <form id="form">
+    <input id="question" type="text" autocomplete="off"
+           placeholder="Quelle est la durée maximale de vie d'une société commerciale ?"
+           aria-label="Votre question">
+    <button id="submit" type="submit">Demander</button>
+    <button id="sources-only" class="ghost" type="button" title="Retrouver les articles sans générer de réponse">Sources seules</button>
+  </form>
+
+  <div class="examples">
+    <span class="label">Exemples</span>
+    <button class="chip" type="button">Quelle est la durée maximale de vie d'une société commerciale ?</button>
+    <button class="chip" type="button">Qu'est-ce qu'une hypothèque ?</button>
+    <button class="chip" type="button">Quel est le capital social minimum d'une SA ?</button>
+    <button class="chip" type="button">Quelle est la peine pour abus de biens sociaux ?</button>
+  </div>
+
+  <div class="columns">
+    <section class="panel">
+      <span class="label">Réponse</span>
+      <div id="answer"></div>
+      <div id="verdict" class="verdict"></div>
+    </section>
+
+    <section class="panel">
+      <span class="label">Articles retrouvés</span>
+      <div id="passages"></div>
+      <p class="note">
+        Les extraits marqués <b>ABROGÉ</b> sont indexés délibérément. Le système
+        doit les voir et refuser de s'appuyer dessus — ne jamais les lui montrer
+        ne prouverait rien.
+      </p>
+    </section>
+  </div>
+</main>
+
+<footer>
+  Réponses générées à partir des extraits ci-contre uniquement · Ce service n'est pas un conseil juridique
+</footer>
+
+<script>
+(() => {
+  "use strict";
+
+  const $ = (id) => document.getElementById(id);
+  const form = $("form");
+  const input = $("question");
+  const submit = $("submit");
+  const sourcesOnly = $("sources-only");
+  const answerEl = $("answer");
+  const verdictEl = $("verdict");
+  const passagesEl = $("passages");
+
+  let source = null;
+
+  const escapeHtml = (s) => s.replace(/[&<>"']/g, (c) => (
+    { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]
+  ));
+
+  // ---- what is actually serving -------------------------------------------
+
+  fetch("/health")
+    .then((r) => r.json())
+    .then((h) => {
+      $("serving").textContent = `${h.pipeline} · ${h.run_id}` + (h.adapter ? " · adapter" : "");
+      $("serving").title = `${h.config_name} · ${h.corpus_size} articles · ${h.generator_model}`;
+    })
+    .catch(() => { $("serving").textContent = "service indisponible"; });
+
+  // ---- rendering -----------------------------------------------------------
+
+  function renderPassages(passages, cited = []) {
+    const citedSet = new Set(cited);
+    passagesEl.innerHTML = passages.map((p) => {
+      const classes = ["passage"];
+      if (citedSet.has(p.chunk_id)) classes.push("cited");
+      if (p.unsafe) classes.push("unsafe");
+      return `
+        <article class="${classes.join(" ")}">
+          <div class="passage-head">
+            <span class="passage-cite">${escapeHtml(p.citation)}</span>
+            ${p.unsafe ? '<span class="badge bad">abrogé</span>' : ""}
+            ${citedSet.has(p.chunk_id) ? '<span class="badge ok">cité</span>' : ""}
+            <span class="passage-score">${p.score.toFixed(3)}</span>
+          </div>
+          ${p.rubric ? `<div class="passage-rubric">${escapeHtml(p.rubric)}</div>` : ""}
+          <div class="passage-text" tabindex="0" role="button"
+               title="Cliquer pour déplier">${escapeHtml(p.text)}</div>
+        </article>`;
+    }).join("");
+
+    passagesEl.querySelectorAll(".passage-text").forEach((el) => {
+      const toggle = () => el.classList.toggle("open");
+      el.addEventListener("click", toggle);
+      el.addEventListener("keydown", (e) => {
+        if (e.key === "Enter" || e.key === " ") { e.preventDefault(); toggle(); }
+      });
+    });
+  }
+
+  function renderVerdict(d) {
+    const badges = [];
+    if (d.abstained) {
+      badges.push('<span class="badge warn">a décliné</span>');
+    } else {
+      badges.push(`<span class="badge ok">${d.citations.length} citation${d.citations.length > 1 ? "s" : ""}</span>`);
+    }
+    // Fabrication: an article cited that was never shown to the model.
+    if (d.citations_unretrieved.length) {
+      badges.push(`<span class="badge bad">${d.citations_unretrieved.length} hors contexte</span>`);
+    }
+    if (d.citations_repealed.length) {
+      badges.push(`<span class="badge bad">${d.citations_repealed.length} abrogé cité</span>`);
+    }
+    badges.push(
+      `<span class="timings">1er token ${Math.round(d.first_token_ms)} ms ·` +
+      ` total ${(d.generation_ms / 1000).toFixed(1)} s ·` +
+      ` recherche ${Math.round(d.retrieval_ms)} ms</span>`
+    );
+    verdictEl.innerHTML = badges.join("");
+    verdictEl.classList.add("show");
+  }
+
+  function busy(on) {
+    submit.disabled = on;
+    sourcesOnly.disabled = on;
+    submit.textContent = on ? "…" : "Demander";
+  }
+
+  function reset() {
+    if (source) { source.close(); source = null; }
+    answerEl.textContent = "";
+    answerEl.classList.remove("declined");
+    verdictEl.classList.remove("show");
+    verdictEl.innerHTML = "";
+  }
+
+  // ---- actions -------------------------------------------------------------
+
+  function ask(question) {
+    reset();
+    busy(true);
+    passagesEl.innerHTML = "";
+
+    const cursor = document.createElement("span");
+    cursor.className = "cursor";
+    answerEl.appendChild(cursor);
+
+    let passages = [];
+    source = new EventSource(`/ask/stream?question=${encodeURIComponent(question)}`);
+
+    source.addEventListener("passages", (e) => {
+      passages = JSON.parse(e.data).passages;
+      renderPassages(passages);
+    });
+
+    source.addEventListener("token", (e) => {
+      cursor.insertAdjacentText("beforebegin", JSON.parse(e.data).text);
+    });
+
+    source.addEventListener("done", (e) => {
+      const d = JSON.parse(e.data);
+      cursor.remove();
+      answerEl.textContent = d.answer;
+      answerEl.classList.toggle("declined", d.abstained);
+      renderPassages(passages, d.citations);
+      renderVerdict(d);
+      source.close(); source = null;
+      busy(false);
+    });
+
+    source.onerror = () => {
+      cursor.remove();
+      if (!answerEl.textContent) answerEl.textContent = "La connexion au service a échoué.";
+      if (source) { source.close(); source = null; }
+      busy(false);
+    };
+  }
+
+  function searchOnly(question) {
+    reset();
+    busy(true);
+    fetch("/search", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ question }),
+    })
+      .then((r) => r.json())
+      .then((d) => {
+        renderPassages(d.passages);
+        verdictEl.innerHTML =
+          `<span class="badge ok">${d.passages.length} articles</span>` +
+          `<span class="timings">recherche ${Math.round(d.retrieval_ms)} ms · pas de génération</span>`;
+        verdictEl.classList.add("show");
+      })
+      .catch(() => { answerEl.textContent = "La recherche a échoué."; })
+      .finally(() => busy(false));
+  }
+
+  // ---- wiring --------------------------------------------------------------
+
+  form.addEventListener("submit", (e) => {
+    e.preventDefault();
+    const q = input.value.trim();
+    if (q) ask(q);
+  });
+
+  sourcesOnly.addEventListener("click", () => {
+    const q = input.value.trim();
+    if (q) searchOnly(q);
+  });
+
+  document.querySelectorAll(".chip").forEach((chip) => {
+    chip.addEventListener("click", () => {
+      input.value = chip.textContent.trim();
+      ask(input.value);
+    });
+  });
+})();
+</script>
+</body>
+</html>

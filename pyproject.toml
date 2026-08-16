@@ -41,15 +41,22 @@ eval = [
     "matplotlib>=3.9",
     "tabulate>=0.9",
 ]
-train = [
+# Loading and running a generator. Split out of `train` because serving needs
+# exactly this and none of the training stack -- without the split, deploying
+# the API would drag TRL and datasets into the image for nothing.
+generate = [
     "transformers>=4.44",
     "peft>=0.12",
-    "trl>=0.9",
-    "datasets>=2.20",
     "accelerate>=0.33",
     "bitsandbytes>=0.43",
 ]
+train = [
+    "kora[generate]",
+    "trl>=0.9",
+    "datasets>=2.20",
+]
 serve = [
+    "kora[retrieval,generate]",
     "fastapi>=0.111",
     "uvicorn[standard]>=0.30",
     "sse-starlette>=2.1",

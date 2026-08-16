@@ -103,6 +103,22 @@ article's opening regardless of the question — **38 of 47** answers, at 98.4%
 token accuracy and 0.027 loss. Every structural metric improved or held while
 quality collapsed. A dashboard would have called it a successful fine-tune.
 
+### Serving — [`docs/serving.md`](docs/serving.md)
+
+FastAPI + SSE, streaming UI, one GPU. Generation is serialised behind a lock,
+because two concurrent 4-bit generations on 8 GiB is an OOM, not a slow request.
+
+| concurrency | first token | total median | answers/min |
+|---:|---:|---:|---:|
+| 1 | **1.1 s** | 20.1 s | 2.68 |
+| 2 | 13.2 s | 39.5 s | 2.83 |
+| 4 | 40.8 s | 69.5 s | 2.83 |
+
+Streaming shows the first token **18.9× sooner** than the full answer — at one
+client. At four it is **1.7×**, because time-to-first-token becomes queue wait
+rather than prefill. Throughput is flat by design and the wall clock proves it:
+179 s, 170 s, 169 s for the same eight answers.
+
 ## Four findings, three of them negative
 
 1. **BM25 does not help on legal French.** The hypothesis was recorded in
@@ -150,7 +166,7 @@ turned off and measured.
 | 3 | Hybrid retrieval, reranking + ablations | done — +8.9 recall@5, BM25 refuted |
 | 4 | QLoRA fine-tuning on a single 8 GiB GPU | done — negative result, not shipped |
 | 5 | Agentic layer: decomposition, self-correction | — |
-| 6 | FastAPI service, streaming UI, Docker, benchmarks | — |
+| 6 | FastAPI service, streaming UI, Docker, benchmarks | done — [`docs/serving.md`](docs/serving.md) |
 | 7 | Technical report and demo | report done — [`docs/report.md`](docs/report.md); demo waits on phase 6 |
 
 ## Setup
@@ -180,6 +196,12 @@ Reproduce any row of the ablation table:
 
 ```bash
 .venv\Scripts\kora.exe eval run -c configs/experiments/07_rerank_fast.yaml
+```
+
+Serve it, with a streaming UI at `http://127.0.0.1:8000`:
+
+```bash
+.venv\Scripts\kora.exe serve start -c configs/experiments/07_rerank_fast.yaml
 ```
 
 ## Repository layout

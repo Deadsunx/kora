@@ -1,0 +1,39 @@
+# Run the service against the corpus and model cache on the host.
+#
+#   docker compose up --build
+#
+# Requires an NVIDIA driver and the container toolkit. Nothing here builds the
+# index: `data/indexes/` must already contain the fingerprint the config asks
+# for, which `kora index build` produces on the host. That is deliberate --
+# building an index inside a short-lived container and losing it on exit is a
+# worse default than failing loudly with the command to run.
+
+services:
+  kora:
+    build: .
+    ports:
+      - "8000:8000"
+    volumes:
+      # Corpus and indexes, read-only: the service never writes to them, and
+      # mounting them ro means a bug in serving cannot corrupt a measured index.
+      - ./data:/data:ro
+      - ./models:/models:ro
+      # Model weights, read-write so a cold start can populate the cache once
+      # instead of re-downloading on every container.
+      - hf-cache:/cache
+    environment:
+      # Which system is being served. Change this to serve a different row of
+      # the ablation table; /health will report the change.
+      KORA_CONFIG: /app/configs/experiments/07_rerank_fast.yaml
+      KORA_PRELOAD: "1"
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: 1
+              capabilities: [gpu]
+    restart: unless-stopped
+
+volumes:
+  hf-cache:

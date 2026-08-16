@@ -16,7 +16,9 @@ project measures instead.
 
 from __future__ import annotations
 
+from collections.abc import Iterator
 from dataclasses import dataclass
+from threading import Thread
 
 from kora.config import ExperimentConfig
 from kora.documents import Article
@@ -106,10 +108,13 @@ class Generator:
         self._model, self._tokenizer = model, tokenizer
         return model, tokenizer
 
-    def answer(self, question: str, articles: list[Article]) -> GeneratedAnswer:
-        """Generate one grounded answer."""
-        import torch
+    def _prepare(self, question: str, articles: list[Article]):
+        """Tokenise one question into model inputs and decoding settings.
 
+        Shared by `answer` and `stream` so that a streamed response and a batch
+        response are the same computation. If these drifted apart, the served
+        system would stop being the system the ablation table measured.
+        """
         model, tokenizer = self._load()
         messages = build_messages(question, articles, self.config)
 
@@ -138,6 +143,14 @@ class Generator:
             # sampling would make two runs of the same config disagree.
             generation_kwargs["do_sample"] = False
 
+        return model, tokenizer, inputs, generation_kwargs
+
+    def answer(self, question: str, articles: list[Article]) -> GeneratedAnswer:
+        """Generate one grounded answer."""
+        import torch
+
+        model, tokenizer, inputs, generation_kwargs = self._prepare(question, articles)
+
         with torch.inference_mode():
             output = model.generate(**inputs, **generation_kwargs)
 
@@ -151,3 +164,40 @@ class Generator:
             prompt_tokens=int(inputs["input_ids"].shape[1]),
             generated_tokens=int(generated.shape[0]),
         )
+
+    def stream(self, question: str, articles: list[Article]) -> Iterator[str]:
+        """Yield the answer in fragments as it is decoded.
+
+        Same prompt, same decoding settings and — at temperature 0 — the same
+        tokens as `answer`. Streaming changes *when* the user sees the text, not
+        what it is: total latency is unchanged, and Phase 4 established that
+        total latency here is essentially linear in output length. What streaming
+        buys is time-to-first-token, which `kora serve bench` measures separately
+        for exactly that reason.
+
+        `generate` blocks, so it runs on a worker thread and the streamer is
+        drained from this one. The thread is non-daemon and joined at the end,
+        so a client disconnecting mid-answer cannot leave a generation running
+        against the GPU forever.
+        """
+        import torch
+        from transformers import TextIteratorStreamer
+
+        model, tokenizer, inputs, generation_kwargs = self._prepare(question, articles)
+
+        streamer = TextIteratorStreamer(
+            tokenizer,
+            skip_prompt=True,
+            skip_special_tokens=True,
+        )
+
+        def run() -> None:
+            with torch.inference_mode():
+                model.generate(**inputs, **generation_kwargs, streamer=streamer)
+
+        thread = Thread(target=run, name="kora-generate")
+        thread.start()
+        try:
+            yield from streamer
+        finally:
+            thread.join()
