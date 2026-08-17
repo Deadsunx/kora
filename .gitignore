@@ -33,6 +33,11 @@ data/raw/
 data/interim/
 data/processed/
 data/indexes/
+# Instruction data quotes article bodies verbatim -- 3.2 M characters of the
+# Actes uniformes. The corpus is not redistributed here, and this file is
+# rebuilt with `kora train build-data`.
+data/training/
+
 
 # Model weights and adapters
 models/

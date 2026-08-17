@@ -306,11 +306,24 @@ Each phase ends by reading raw outputs.
 
 ## Corpus and licensing
 
-Source texts are the Actes uniformes published by OHADA. They are not
-redistributed in this repository; `data/` is git-ignored and rebuilt on demand
-with `kora corpus download` and `kora corpus parse`. Provenance for each document
-is recorded at ingestion time.
+Source texts are the Actes uniformes published by OHADA. **They are not
+redistributed in this repository.** The corpus, indexes and instruction data are
+git-ignored and rebuilt on demand with `kora corpus download`,
+`kora corpus parse`, `kora index build` and `kora train build-data`. Provenance
+for each document is recorded at ingestion time.
+
+Two derived files *are* committed, because they are the project's own work
+rather than the corpus:
+
+- `data/eval/gold_qa.jsonl` — the 64 hand-validated questions, ~21 KB, quoting
+  only what a reference answer needs.
+- `data/corpus_manifest.yaml` — title, year, legal status and source URL per
+  act. No article text.
+
+`data/training/sft.jsonl` is **not** committed: it quotes article bodies
+verbatim inside its prompts, around 3.2 M characters of the Actes uniformes,
+which would be redistribution. `kora train build-data` regenerates it.
 
 ## License
 
-MIT for the code. The corpus is subject to its own terms.
+[MIT](LICENSE) for the code. The corpus is subject to its own terms.
