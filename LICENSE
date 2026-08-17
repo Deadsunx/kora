@@ -19,22 +19,3 @@ AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
 LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
-
----
-
-The MIT licence above covers the code in this repository.
-
-It does not cover the Actes uniformes OHADA. Those texts are published by
-OHADA and are subject to their own terms; they are not redistributed here.
-`data/raw/`, `data/interim/`, `data/processed/`, `data/indexes/` and
-`data/training/` are git-ignored and are rebuilt from source with the `kora`
-CLI.
-
-Two derived files are committed, and are the project's own work rather than
-the corpus:
-
-- `data/eval/gold_qa.jsonl` — 64 hand-written and hand-validated questions with
-  short reference answers, quoting only what is necessary to state the expected
-  answer.
-- `data/corpus_manifest.yaml` — bibliographic metadata for each act: title,
-  year, legal status, source URL. No article text.

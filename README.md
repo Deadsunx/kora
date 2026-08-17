@@ -326,4 +326,5 @@ which would be redistribution. `kora train build-data` regenerates it.
 
 ## License
 
-[MIT](LICENSE) for the code. The corpus is subject to its own terms.
+[MIT](LICENSE) for the code. The corpus and the models carry their own terms —
+see [NOTICE.md](NOTICE.md).
