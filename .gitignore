@@ -53,3 +53,6 @@ runs/**/*.log
 
 # Hugging Face cache if pointed inside the repo
 .cache/
+
+# Gradio demo scratch
+deploy/space/__pycache__/

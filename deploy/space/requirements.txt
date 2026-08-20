@@ -1,0 +1,16 @@
+# The demo installs the project itself rather than vendoring a copy, so the
+# Space always runs the same pipeline the ablation table measured.
+git+https://github.com/Deadsunx/kora.git
+
+# Retrieval and generation stacks. torch is supplied by the Space image on GPU
+# hardware, so it is deliberately not pinned here.
+sentence-transformers>=3.0
+faiss-cpu>=1.8
+rank-bm25>=0.2.2
+transformers>=4.44
+accelerate>=0.33
+peft>=0.12
+bitsandbytes>=0.43
+
+gradio>=5.0
+huggingface_hub>=0.25
