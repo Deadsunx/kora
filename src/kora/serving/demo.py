@@ -12,6 +12,7 @@ the evaluation harness calls.
 from __future__ import annotations
 
 import os
+import threading
 import time
 from collections.abc import Iterator
 
@@ -38,6 +39,10 @@ EXAMPLES = [
 ]
 
 _engine = None
+# Hosts serve several requests per container, so two callers can reach a null
+# `_engine` at once. Unguarded, each builds a full pipeline: the Modal logs
+# showed Qwen3-4B loading twice, fifteen seconds apart, on one container.
+_engine_lock = threading.Lock()
 
 
 def ensure_data() -> None:
@@ -62,15 +67,28 @@ def ensure_data() -> None:
 
 
 def engine():
-    """Load the pipeline once, on first use."""
+    """Load the pipeline once, on first use.
+
+    Double-checked under a lock: the first check keeps the warm path free of
+    lock traffic, the second stops a second caller rebuilding what the first is
+    already loading.
+    """
     global _engine
-    if _engine is None:
+    if _engine is not None:
+        return _engine
+
+    with _engine_lock:
+        if _engine is not None:
+            return _engine
+
         ensure_data()
 
         from kora.config import load_config
         from kora.serving.engine import Engine
 
-        cfg = load_config(os.environ.get("KORA_CONFIG", "configs/experiments/07_rerank_fast.yaml"))
+        cfg = load_config(
+            os.environ.get("KORA_CONFIG", "configs/experiments/07_rerank_fast.yaml")
+        )
         quant = os.environ.get("KORA_QUANT")
         if quant:
             # 4-bit is the measured system. fp16 exists for hosts where
@@ -78,8 +96,12 @@ def engine():
             cfg = cfg.model_copy(
                 update={"generator": cfg.generator.model_copy(update={"quantization": quant})}
             )
-        _engine = Engine(cfg, preload_generator=False)
-    return _engine
+        # Loading the generator inside the first HTTP request means the caller
+        # waits on a four-gigabyte download and the connection times out, which
+        # is what happened on the first Modal deploy. Hosts that can afford it
+        # warm at container start instead.
+        _engine = Engine(cfg, preload_generator=os.environ.get("KORA_PRELOAD") == "1")
+        return _engine
 
 
 def format_passages(passages) -> str:
@@ -146,7 +168,10 @@ def build_demo():
     """Construct the Gradio interface."""
     import gradio as gr
 
-    with gr.Blocks(title="Kora — droit OHADA", theme=gr.themes.Soft()) as demo:
+    # Gradio 6 moved `theme` from the Blocks constructor to launch(), and
+    # passing it here warns. The mount_gradio_app path used on Modal never
+    # calls launch(), so the theme is applied by the caller instead.
+    with gr.Blocks(title="Kora — droit OHADA") as demo:
         gr.Markdown(
             "# Kora\n"
             "**Questions-réponses sur les Actes uniformes OHADA**, le droit des "

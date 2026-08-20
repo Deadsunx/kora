@@ -64,6 +64,11 @@ image = (
             "KORA_DATA_DIR": "/cache/data",
             "KORA_DATASET_REPO": "Deadsunx/kora-corpus",
             "KORA_CONFIG": "/opt/kora/configs/experiments/07_rerank_fast.yaml",
+            # Load the models when the container starts rather than inside the
+            # first request. Modal holds traffic until the ASGI app is returned,
+            # so the cost lands on the cold start where it belongs instead of
+            # timing out somebody's first question.
+            "KORA_PRELOAD": "1",
         }
     )
 )
@@ -80,7 +85,10 @@ image = (
     timeout=900,
     min_containers=0,
 )
-@modal.concurrent(max_inputs=4)
+# One GPU generates one answer at a time, exactly as the Phase 6 benchmark
+# measured. Extra concurrency here would not add throughput, it would only let
+# more callers queue inside a single container.
+@modal.concurrent(max_inputs=2)
 @modal.asgi_app()
 def ui():
     """Gradio over ASGI."""
@@ -104,5 +112,11 @@ def ui():
         )
         shutil.copytree(downloaded, data_dir)
     cache.commit()
+
+    # Build the pipeline before handing the app to Modal, so the container is
+    # only marked ready once it can actually answer.
+    from kora.serving.demo import engine
+
+    engine()
 
     return mount_gradio_app(app=FastAPI(), blocks=build_demo().queue(max_size=8), path="/")
