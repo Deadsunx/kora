@@ -1,0 +1,1487 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="description" content="Retrieval-augmented question answering over French-language African business law. An ablation study across corpus construction, retrieval, QLoRA fine-tuning, agentic retrieval and serving - in which most of the principal findings are negative.">
+<meta name="author" content="Oumar Tamba Tirera">
+<meta name="color-scheme" content="light dark">
+<link rel="canonical" href="https://deadsunx.github.io/kora/">
+
+<meta property="og:type" content="article">
+<meta property="og:url" content="https://deadsunx.github.io/kora/">
+<meta property="og:title" content="Kora: a measured retrieval system for OHADA business law">
+<meta property="og:description" content="Retrieval-augmented question answering over French-language African business law. An ablation study across corpus construction, retrieval, QLoRA fine-tuning, agentic retrieval and serving - in which most of the principal findings are negative.">
+<meta name="twitter:card" content="summary">
+
+<link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>&#9878;</text></svg>">
+
+<title>Kora Technical Report</title>
+<style>
+  :root {
+    --paper:      #F5F5F2;
+    --paper-sunk: #EDEDE8;
+    --ink:        #16181C;
+    --ink-soft:   #4E535C;
+    --ink-faint:  #83888F;
+    --rule:       #DCDCD5;
+    --rule-firm:  #C3C4BC;
+    --madder:     #A02B34;
+    --madder-bg:  #F3E4E4;
+    --teal:       #1B5E52;
+    --teal-bg:    #E2EDE9;
+
+    --serif: "Iowan Old Style", "Palatino Linotype", "Book Antiqua", Palatino, "URW Palladio L", Georgia, serif;
+    --mono: ui-monospace, "SF Mono", "Cascadia Mono", "Consolas", "DejaVu Sans Mono", monospace;
+
+    --measure: 68ch;
+    --rail: 5rem;
+  }
+
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --paper:      #15171B;
+      --paper-sunk: #1D2027;
+      --ink:        #E7E7E1;
+      --ink-soft:   #A5AAB2;
+      --ink-faint:  #767C85;
+      --rule:       #2C3038;
+      --rule-firm:  #3E434C;
+      --madder:     #E0797F;
+      --madder-bg:  #2E1D20;
+      --teal:       #6FC0AC;
+      --teal-bg:    #18302B;
+    }
+  }
+
+  :root[data-theme="dark"] {
+    --paper:      #15171B;
+    --paper-sunk: #1D2027;
+    --ink:        #E7E7E1;
+    --ink-soft:   #A5AAB2;
+    --ink-faint:  #767C85;
+    --rule:       #2C3038;
+    --rule-firm:  #3E434C;
+    --madder:     #E0797F;
+    --madder-bg:  #2E1D20;
+    --teal:       #6FC0AC;
+    --teal-bg:    #18302B;
+  }
+
+  * { box-sizing: border-box; }
+
+  body {
+    background: var(--paper);
+    color: var(--ink);
+    font-family: var(--serif);
+    font-size: 17px;
+    line-height: 1.62;
+    margin: 0;
+    padding: 0 1.5rem 8rem;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  .sheet {
+    max-width: calc(var(--rail) + var(--measure) + 2.5rem);
+    margin: 0 auto;
+  }
+
+  /* ---------- masthead ---------- */
+
+  .masthead {
+    padding: 5.5rem 0 0;
+    display: flex;
+    flex-direction: column;
+    gap: 1.25rem;
+  }
+
+  .eyebrow {
+    font-family: var(--mono);
+    font-size: 0.6875rem;
+    letter-spacing: 0.16em;
+    text-transform: uppercase;
+    color: var(--madder);
+    margin: 0;
+  }
+
+  h1 {
+    font-family: var(--serif);
+    font-size: clamp(2.1rem, 5.2vw, 3.05rem);
+    line-height: 1.12;
+    font-weight: 600;
+    letter-spacing: -0.015em;
+    text-wrap: balance;
+    margin: 0;
+    max-width: 22ch;
+  }
+
+  .standfirst {
+    font-size: 1.16rem;
+    line-height: 1.55;
+    color: var(--ink-soft);
+    max-width: 56ch;
+    margin: 0;
+  }
+
+  .colophon {
+    font-family: var(--mono);
+    font-size: 0.75rem;
+    line-height: 1.9;
+    color: var(--ink-faint);
+    border-top: 1px solid var(--rule-firm);
+    border-bottom: 1px solid var(--rule-firm);
+    padding: 0.85rem 0;
+    margin-top: 1.25rem;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.4rem 1.4rem;
+  }
+  .colophon b { color: var(--ink-soft); font-weight: 500; }
+
+  /* ---------- key figures ---------- */
+
+  .figures {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+    gap: 1px;
+    background: var(--rule);
+    border: 1px solid var(--rule);
+    margin: 3.5rem 0 0;
+  }
+  .fig {
+    background: var(--paper);
+    padding: 1.15rem 1.2rem 1.25rem;
+    display: flex;
+    flex-direction: column;
+    gap: 0.3rem;
+  }
+  .fig-n {
+    font-family: var(--mono);
+    font-size: 1.65rem;
+    font-variant-numeric: tabular-nums;
+    letter-spacing: -0.02em;
+    line-height: 1;
+  }
+  .fig-n.neg { color: var(--madder); }
+  .fig-n.pos { color: var(--teal); }
+  .fig-l {
+    font-family: var(--mono);
+    font-size: 0.6875rem;
+    letter-spacing: 0.09em;
+    text-transform: uppercase;
+    color: var(--ink-faint);
+  }
+  .fig-s { font-size: 0.875rem; color: var(--ink-soft); line-height: 1.4; }
+
+  /* ---------- sectioned body with marginal rail ---------- */
+
+  section {
+    display: grid;
+    grid-template-columns: var(--rail) minmax(0, 1fr);
+    gap: 0 2.5rem;
+    margin-top: 4.5rem;
+  }
+  section > * { grid-column: 2; }
+
+  .mark {
+    grid-column: 1;
+    grid-row: 1 / span 99;
+    font-family: var(--mono);
+    font-size: 0.75rem;
+    letter-spacing: 0.06em;
+    color: var(--madder);
+    text-align: right;
+    padding-top: 0.55rem;
+    align-self: start;
+    position: sticky;
+    top: 1.5rem;
+  }
+
+  h2 {
+    font-size: 1.6rem;
+    font-weight: 600;
+    line-height: 1.22;
+    letter-spacing: -0.01em;
+    text-wrap: balance;
+    margin: 0 0 1.4rem;
+    padding-bottom: 0.7rem;
+    border-bottom: 2px solid var(--ink);
+    max-width: var(--measure);
+  }
+
+  h3 {
+    font-size: 1.115rem;
+    font-weight: 600;
+    line-height: 1.35;
+    text-wrap: balance;
+    margin: 2.6rem 0 0.15rem;
+    max-width: var(--measure);
+  }
+
+  .detector {
+    font-family: var(--mono);
+    font-size: 0.6875rem;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: var(--ink-faint);
+    margin: 0 0 0.9rem;
+  }
+  .detector b { color: var(--madder); font-weight: 400; }
+
+  p, ul, ol { max-width: var(--measure); }
+  p { margin: 0 0 1.05rem; }
+  ul, ol { margin: 0 0 1.05rem; padding-left: 1.15rem; }
+  li { margin-bottom: 0.5rem; padding-left: 0.2rem; }
+  li::marker { color: var(--ink-faint); }
+
+  strong { font-weight: 600; }
+  em { font-style: italic; }
+
+  code {
+    font-family: var(--mono);
+    font-size: 0.855em;
+    background: var(--paper-sunk);
+    padding: 0.1em 0.34em;
+    border-radius: 2px;
+    word-break: break-word;
+  }
+
+  pre {
+    font-family: var(--mono);
+    font-size: 0.8125rem;
+    line-height: 1.65;
+    background: var(--paper-sunk);
+    border-left: 2px solid var(--rule-firm);
+    padding: 1rem 1.15rem;
+    margin: 0 0 1.4rem;
+    max-width: var(--measure);
+    overflow-x: auto;
+  }
+  pre code { background: none; padding: 0; font-size: inherit; }
+
+  blockquote {
+    margin: 0 0 1.4rem;
+    padding: 0.1rem 0 0.1rem 1.35rem;
+    border-left: 2px solid var(--madder);
+    color: var(--ink-soft);
+    font-style: italic;
+    max-width: var(--measure);
+  }
+  blockquote p:last-child { margin-bottom: 0; }
+  blockquote strong { color: var(--ink); }
+
+  /* ---------- tables ---------- */
+
+  .tw {
+    overflow-x: auto;
+    margin: 0 0 1.6rem;
+    max-width: calc(var(--measure) + var(--rail));
+  }
+  table {
+    border-collapse: collapse;
+    width: 100%;
+    font-size: 0.875rem;
+    font-variant-numeric: tabular-nums;
+  }
+  thead th {
+    font-family: var(--mono);
+    font-size: 0.6875rem;
+    font-weight: 400;
+    letter-spacing: 0.09em;
+    text-transform: uppercase;
+    color: var(--ink-faint);
+    text-align: left;
+    padding: 0 0.85rem 0.5rem 0;
+    border-bottom: 1px solid var(--rule-firm);
+    white-space: nowrap;
+  }
+  tbody td {
+    padding: 0.52rem 0.85rem 0.52rem 0;
+    border-bottom: 1px solid var(--rule);
+    vertical-align: baseline;
+  }
+  tbody tr:last-child td { border-bottom: 1px solid var(--rule-firm); }
+  th.n, td.n { text-align: right; font-family: var(--mono); padding-right: 1.1rem; }
+  td.win { color: var(--teal); font-weight: 600; }
+  td.loss { color: var(--madder); font-weight: 600; }
+  tr.best td { background: var(--teal-bg); }
+  tr.best td:first-child { font-weight: 600; }
+  caption {
+    caption-side: bottom;
+    text-align: left;
+    font-size: 0.8125rem;
+    color: var(--ink-faint);
+    padding-top: 0.7rem;
+    line-height: 1.5;
+  }
+
+  /* ---------- verdict tags ---------- */
+
+  .tag {
+    display: inline-block;
+    font-family: var(--mono);
+    font-size: 0.625rem;
+    letter-spacing: 0.11em;
+    text-transform: uppercase;
+    padding: 0.2em 0.5em;
+    border-radius: 2px;
+    vertical-align: 0.22em;
+    margin-left: 0.5rem;
+    font-weight: 500;
+  }
+  .tag.neg { background: var(--madder-bg); color: var(--madder); }
+  .tag.pos { background: var(--teal-bg); color: var(--teal); }
+
+  /* ---------- callout ---------- */
+
+  .note {
+    border-top: 2px solid var(--madder);
+    background: var(--paper-sunk);
+    padding: 1.1rem 1.25rem 0.35rem;
+    margin: 0 0 1.6rem;
+    max-width: var(--measure);
+  }
+  .note p:last-child { margin-bottom: 0.75rem; }
+  .note .detector { margin-bottom: 0.6rem; }
+
+  /* ---------- compare block ---------- */
+
+  .compare {
+    display: grid;
+    gap: 1px;
+    background: var(--rule-firm);
+    border: 1px solid var(--rule-firm);
+    margin: 0 0 1.05rem;
+    max-width: var(--measure);
+  }
+  .compare > div { background: var(--paper); padding: 0.9rem 1.1rem; }
+  .compare .who {
+    font-family: var(--mono);
+    font-size: 0.6875rem;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: var(--ink-faint);
+    margin-bottom: 0.35rem;
+  }
+  .compare .q { background: var(--paper-sunk); }
+  .compare .txt { font-size: 0.94rem; line-height: 1.5; }
+  .compare .adapter .txt { color: var(--madder); }
+
+  footer {
+    margin-top: 5rem;
+    padding-top: 1.5rem;
+    border-top: 1px solid var(--rule-firm);
+    font-family: var(--mono);
+    font-size: 0.75rem;
+    color: var(--ink-faint);
+    line-height: 1.8;
+    max-width: calc(var(--measure) + var(--rail));
+  }
+
+  @media (max-width: 860px) {
+    body { font-size: 16px; padding: 0 1.15rem 5rem; }
+    section { grid-template-columns: 1fr; gap: 0; }
+    section > * { grid-column: 1; }
+    .mark {
+      grid-column: 1;
+      grid-row: auto;
+      text-align: left;
+      position: static;
+      padding: 0 0 0.5rem;
+    }
+    .masthead { padding-top: 3rem; }
+  }
+</style>
+</head>
+<body>
+<div class="sheet">
+
+  <header class="masthead">
+    <p class="eyebrow">Technical report · August 2026</p>
+    <h1>Kora: a measured retrieval system for OHADA business law</h1>
+    <p class="standfirst">
+      Retrieval-augmented question answering over French-language African business
+      law. Most of its principal findings are negative — and two of them were
+      invisible to every metric in the harness.
+    </p>
+    <div class="colophon">
+      <span><b>3,056</b> articles, 10 acts</span>
+      <span><b>64</b> validated questions</span>
+      <span><b>23</b> recorded runs</span>
+      <span><b>252</b> tests</span>
+      <span>one RTX 4070 Laptop, 8&nbsp;GiB</span>
+    </div>
+  </header>
+
+  <div class="figures">
+    <div class="fig">
+      <span class="fig-n pos">0.815</span>
+      <span class="fig-l">recall@5</span>
+      <span class="fig-s">+8.0 points over the frozen baseline</span>
+    </div>
+    <div class="fig">
+      <span class="fig-n">205 ms</span>
+      <span class="fig-l">retrieval, median</span>
+      <span class="fig-s">down from 567 ms, and more accurate</span>
+    </div>
+    <div class="fig">
+      <span class="fig-n pos">0.000</span>
+      <span class="fig-l">fabricated citations</span>
+      <span class="fig-s">across 59 questions, base model</span>
+    </div>
+    <div class="fig">
+      <span class="fig-n neg">−11.9</span>
+      <span class="fig-l">fine-tune, citation recall</span>
+      <span class="fig-s">every other metric improved</span>
+    </div>
+  </div>
+
+  <section>
+    <div class="mark">§&nbsp;0</div>
+    <h2>Summary</h2>
+    <p>
+      Kora answers questions about the <strong>Actes uniformes OHADA</strong> — the
+      business law shared by 17 mostly francophone African states — with citations
+      to specific articles, or refuses to answer. It reaches recall@5&nbsp;=&nbsp;0.824
+      at 193&nbsp;ms, and generates answers that never fabricate a citation, never
+      present repealed text as law, and correctly decline 7 of 8 unanswerable
+      questions.
+    </p>
+    <p>Those are the headline numbers. They are not the point of this report.</p>
+    <p>
+      The point is that most of the project's principal findings are
+      <strong>negative</strong>: a well-motivated hypothesis about lexical search
+      was refuted, a wider candidate pool made reranking worse, an accuracy gain
+      was very nearly written up as a speed optimisation, a QLoRA fine-tune that
+      improved almost every metric made the system worse, neither agentic
+      mechanism was calibrated enough to help, and the streaming service's
+      headline 18.9× speedup turned out to hold only for a single user.
+    </p>
+    <p>
+      Each was found by reading raw output, or by measuring a condition that was
+      not flattering. This report is organised around <em>how</em> each was
+      found, because that is the transferable part.
+    </p>
+  </section>
+
+  <section>
+    <div class="mark">§&nbsp;1</div>
+    <h2>Why this corpus</h2>
+    <p>
+      Retrieval systems are overwhelmingly built and evaluated in English. The
+      techniques are assumed to transfer. Usually nobody checks. OHADA law is a
+      good place to check:
+    </p>
+    <ul>
+      <li>
+        <strong>It is legal French.</strong> Dense encoders trained mainly on
+        English web text blur precisely the tokens that carry meaning here —
+        article numbers, fixed terms of art like <em>société anonyme</em> or
+        <em>sûreté mobilière</em>, cross-references between acts. That is a
+        testable claim, and §5 tests it.
+      </li>
+      <li>
+        <strong>It is highly structured.</strong> Livre → Titre → Chapitre →
+        Article, with contiguous article numbering. That structure is both a gift
+        for chunking and a free correctness invariant: a gap in the numbering
+        means a heading was swallowed.
+      </li>
+      <li>
+        <strong>Answers must be attributable.</strong> "Article 640 AUSCGIE" is
+        checkable by a human in seconds. A legal assistant that cannot cite, or
+        will not say <em>I don't know</em>, is worse than useless — so citation
+        accuracy and abstention are primary metrics here, not afterthoughts.
+      </li>
+      <li>
+        <strong>It is genuinely low-resource.</strong> No benchmark, no gold QA
+        set, no clean corpus. All three had to be built, which is most of the work
+        and most of the interesting failures.
+      </li>
+    </ul>
+  </section>
+
+  <section>
+    <div class="mark">§&nbsp;2</div>
+    <h2>Method</h2>
+    <p>
+      Five commitments, made before results existed, each of which cost something
+      later.
+    </p>
+    <p>
+      <strong>The baseline is frozen.</strong> <code>configs/base.yaml</code> is
+      the reference for every comparison and was never "improved" once experiments
+      began. A baseline that drifts makes an ablation table meaningless.
+    </p>
+    <p>
+      <strong>Configs are content-hashed.</strong> A run's identity is a SHA-256 of
+      the settings that produced it. Two experiments cannot overwrite each other's
+      results, and any row of any table traces back to the exact system that
+      produced it. Chunking and embedding settings carry a <em>separate</em> hash,
+      so changing the generator reuses the existing index rather than rebuilding
+      it — reuse that is legitimate because the hash proves the index is the same.
+    </p>
+    <p>
+      <strong>Configs reject unknown keys.</strong> A mistyped YAML key raises at
+      load time instead of silently falling back to a default and invalidating a
+      whole results table.
+    </p>
+    <p>
+      <strong>Hypotheses are written down before the run.</strong> The BM25
+      hypothesis was recorded in <code>02_hybrid.yaml</code>; the fine-tuning
+      hypothesis in <code>generation-baseline.md</code>. Both were committed before
+      the measurement. One was wrong, which is the reason for the practice.
+    </p>
+    <p>
+      <strong>Only human-validated questions appear in reported numbers.</strong>
+      Every run prints its gold composition and sample size alongside the metrics,
+      because a recall figure without an <em>n</em> behind it is not a result.
+    </p>
+  </section>
+
+  <section>
+    <div class="mark">§&nbsp;3</div>
+    <h2>Building the corpus: five defects, five different detectors</h2>
+    <p>
+      The corpus had to be parsed from source PDFs. Three self-checks were built
+      into the parser — the third exists because of defect&nbsp;1.
+    </p>
+    <div class="tw">
+      <table>
+        <thead>
+          <tr><th>Check</th><th>Catches</th></tr>
+        </thead>
+        <tbody>
+          <tr><td><code>numbering_gaps()</code></td><td>a swallowed heading — numbering must be contiguous</td></tr>
+          <tr><td><code>text_coverage()</code></td><td>bodies discarded while numbering stays perfect</td></tr>
+          <tr><td><code>longest_article_chars</code></td><td>text merged into the wrong article, which leaves both of the above healthy</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <p>
+      <strong>Result: 3,056 articles across 10 acts, zero numbering gaps,
+      95.5–99.3% coverage.</strong> Five exact agreements with an independently
+      published reference corpus, and both disagreements explained.
+    </p>
+
+    <h3>1 · Table-of-contents contamination</h3>
+    <p class="detector">Found by — <b>the length distribution</b></p>
+    <p>A contents page repeats every article heading followed by dot leaders:</p>
+    <pre><code>Article 2
+..................................................... 14</code></pre>
+    <p>
+      The heading matches the article pattern exactly. Left alone it creates a
+      phantom article whose body is a row of dots and — worse — <em>claims the
+      number</em>, so the genuine article forty pages later is dismissed as a
+      duplicate cross-reference and its text appended to whatever article happens
+      to be open.
+    </p>
+    <div class="note">
+      <p class="detector">Why the existing checks missed it</p>
+      <p>
+        <strong>Both passed.</strong> Numbering stayed contiguous, because the
+        phantoms covered every number. Coverage stayed at 98.7%, because the text
+        was still present, merely misfiled.
+      </p>
+    </div>
+    <p>
+      It surfaced only on inspecting article lengths: 191 articles of pure dots,
+      and three blocks of 19,000–31,000 characters where real articles run to a
+      few thousand. <code>longest_article_chars</code> was added as the third
+      check as a result.
+    </p>
+
+    <h3>2 · <span style="font-style:italic">Article premier</span></h3>
+    <p class="detector">Found by — <b>the numbering invariant</b></p>
+    <p>
+      French legal drafting numbers the first article in words. AUPSRVE-2023
+      carries the convention into its inserted articles
+      (<code>Article premier-11</code>) while cross-referencing the same
+      provisions numerically in the body (<code>l'article 1-10</code>).
+    </p>
+    <p>
+      A digits-only pattern does not merely miss article 1: every
+      <code>premier-N</code> heading goes unrecognised and its text is absorbed
+      into the preceding article. The gap check reported exactly <strong>one</strong>
+      missing number, which was the visible tip of <strong>17</strong> lost
+      articles. Fixing it took AUPSRVE from 431 articles at 92.7% coverage to 448
+      at 98.4%.
+    </p>
+    <p>
+      A detail worth recording: in the corrected pattern, alternation order is
+      load-bearing. <code>(?:premier|1\s*er|\d+)</code> — with <code>\d+</code>
+      last, because putting it first makes <code>1er</code> match as
+      <code>1</code> followed by a stray <code>er</code>.
+    </p>
+
+    <h3>3 · Repealed articles destroyed by a heuristic</h3>
+    <p class="detector">Found by — <b>writing the gold questions</b></p>
+    <p>
+      A repealed article is printed as its heading followed by the single word
+      <em>Abrogé</em>:
+    </p>
+    <pre><code>Article 12
+Abrogé
+Article 13
+Les petites entités sont assujetties, sauf option, au Système minimal…</code></pre>
+    <p>
+      That word is short, has no terminal full stop, and is not a structural
+      marker — so the rubric heuristic classified it as a marginal title belonging
+      to the <em>next</em> heading. <strong>Two errors from one heuristic: article
+      12 lost its only content and was left empty, while article 13 — perfectly in
+      force — was made to look repealed.</strong>
+    </p>
+    <p>
+      Three articles in AUDCIF were affected (12, 27, 60). They had been visible
+      the whole time as three zero-length bodies in the length distribution. They
+      were noticed and not chased.
+    </p>
+    <p>
+      The fix is narrow: a candidate rubric is reclaimed from the previous article
+      only when that article survives losing it. If removing it would leave an
+      empty body, it was content, not a title.
+    </p>
+    <div class="note">
+      <p class="detector">The second-order failure</p>
+      <p>
+        This defect produced a <strong>wrong claim in an earlier version of the
+        parse document</strong>, which named 13, 28 and 61 as the repealed
+        articles — corrupted parser output read as ground truth. The repealed
+        articles are 12, 27 and 60.
+      </p>
+    </div>
+    <p>
+      It also forced a design change. Legal status is not only a property of
+      documents: AUDCIF-2017 is in force while three of its articles are not, so
+      reading status from the manifest alone would score a citation of article 12
+      as perfectly safe. Repealed articles now carry an explicit
+      <code>[TEXTE ABROGÉ]</code> marker into their <em>indexed text</em>, so the
+      warning reaches the generator's context window rather than living only in
+      metadata.
+    </p>
+
+    <h3>4 · Short-page furniture detection</h3>
+    <p class="detector">Found by — <b>a unit test</b></p>
+    <p>
+      Header/footer detection sampled the first and last three lines of each page
+      — which on a short page is every line, letting body text be deleted as
+      furniture. Real pages are long enough that this never triggered in
+      production. Found only because a test constructed a short page.
+    </p>
+
+    <h3>5 · Page numbers in article bodies</h3>
+    <p class="detector">Found by — <b>a manual spot-check</b></p>
+    <p>
+      Spot-checking bodies against the reference corpus showed one beginning
+      <code>"page 3 / 217"</code>. Page numbers differ on every page, so
+      frequency-based furniture detection is structurally incapable of seeing
+      them. Now removed by pattern.
+    </p>
+
+    <h3>The AUSCGIE disagreement, resolved</h3>
+    <p>
+      The reference corpus reports 1,392 articles for AUSCGIE-2014 against our
+      1,089 — an apparent deficit of 303. Comparing article <em>identifiers</em>
+      rather than counts:
+    </p>
+    <div class="tw">
+      <table>
+        <thead>
+          <tr><th></th><th class="n">Reference</th><th class="n">Ours</th></tr>
+        </thead>
+        <tbody>
+          <tr><td>Rows</td><td class="n">1,392</td><td class="n">1,089</td></tr>
+          <tr><td><strong>Distinct article numbers</strong></td><td class="n">811</td><td class="n win">1,089</td></tr>
+          <tr><td>Duplicated labels</td><td class="n">549</td><td class="n">0</td></tr>
+          <tr><td>Articles absent from the other set</td><td class="n win">0</td><td class="n">278</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <p>
+      Our extraction is a <strong>strict superset</strong> — every article the
+      reference holds is present in ours, plus 278 more, three of which were
+      spot-checked as genuine provisions. The deficit was an artefact of comparing
+      our distinct-article count against their row count. Stated plainly because
+      an earlier version of that document speculated about "different counting
+      units", and the speculation was wrong.
+    </p>
+
+    <h3>The lesson</h3>
+    <p>
+      Each of the five defects was found by a <em>different</em> mechanism — the
+      numbering invariant, the length distribution, a unit test, a manual
+      spot-check, and building the gold set. <strong>None of them caught what
+      another caught.</strong> That is the argument for having several, and for
+      reading output by hand as well as by metric.
+    </p>
+  </section>
+
+  <section>
+    <div class="mark">§&nbsp;4</div>
+    <h2>The gold set, and what validation cost</h2>
+    <p>
+      60 questions were drafted with model assistance, then reviewed by hand
+      against the printed article text. The review asks exactly one question:
+    </p>
+    <blockquote>
+      <p><strong>Does the text of the gold article actually support the reference answer?</strong></p>
+    </blockquote>
+    <p>
+      Not "is this true about OHADA law". Not "is this a good question". Only:
+      <em>if a system retrieved exactly these articles, could it produce that
+      answer?</em> If the article does not contain the fact, the gold label is
+      wrong and every system is scored against an impossible target — the metric
+      silently measures nothing.
+    </p>
+    <p>
+      Provenance is tracked per question and only validated questions count
+      towards the headline. The schema enforces category coherence:
+      <code>unanswerable</code> ⇔ no gold article, <code>lookup</code> ⇔ exactly
+      one, <code>multi_hop</code> ⇔ at least two, <code>cross_act</code> ⇔ at
+      least two <em>documents</em>.
+    </p>
+    <p><strong>Outcome: 60 → 59 questions, 11 repointed at different articles.</strong></p>
+    <p>
+      Validation raised recall@5 from 0.679 to 0.735 without a single change to
+      the system — the improvement is the removal of gold articles that were never
+      required to answer their question. Retrieval had been marked down for
+      failing to find passages that did not need finding.
+    </p>
+    <div class="note">
+      <p class="detector">The part worth reporting</p>
+      <p>
+        That cuts both ways. <strong>The same review that raised the headline
+        number destroyed the one finding the earlier run appeared to
+        support.</strong> An apparent cross-act collapse at 0.292 turned out to
+        rest on eight questions, three of which were not cross-act at all and one
+        of which was malformed. The category was cut to four.
+      </p>
+    </div>
+    <p>Two smaller results from the review:</p>
+    <ul>
+      <li>
+        <strong>q057 was mislabelled <code>unanswerable</code>.</strong> It asks
+        about minimum share capital in Cameroon; the OHADA general rule <em>is</em>
+        in the corpus. Left alone, it would have penalised a system for correctly
+        citing article 387. It was reclassified — and in §6 it catches the
+        opposite failure.
+      </li>
+      <li>
+        <strong>OHADA acts are self-contained.</strong> Genuine
+        <code>cross_act</code> questions need an explicit textual bridge between
+        two acts, which is rarer than it sounds. This is why the category is four
+        questions and why it is recorded rather than reported.
+      </li>
+    </ul>
+  </section>
+
+  <section>
+    <div class="mark">§&nbsp;5</div>
+    <h2>Retrieval: what earns its cost</h2>
+    <p>
+      Every row is one config file, run through the same code path, on the same
+      index. Latency is end-to-end per question, measured one question at a time,
+      because that is what a user waits for.
+    </p>
+    <div class="tw">
+      <table>
+        <thead>
+          <tr>
+            <th>System</th>
+            <th class="n">R@1</th><th class="n">R@5</th>
+            <th class="n">MRR</th><th class="n">nDCG@5</th>
+            <th class="n">Median</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr><td>BM25 only</td><td class="n">0.381</td><td class="n">0.637</td><td class="n">0.576</td><td class="n">0.551</td><td class="n">5 ms</td></tr>
+          <tr><td>dense + BM25 (RRF)</td><td class="n">0.417</td><td class="n">0.708</td><td class="n">0.625</td><td class="n">0.611</td><td class="n">26 ms</td></tr>
+          <tr><td>dense — frozen baseline</td><td class="n">0.461</td><td class="n">0.735</td><td class="n">0.652</td><td class="n">0.641</td><td class="n">17 ms</td></tr>
+          <tr><td>dense + BM25 + rerank, pool 50</td><td class="n">0.622</td><td class="n">0.815</td><td class="n win">0.800</td><td class="n">0.763</td><td class="n">461 ms</td></tr>
+          <tr><td>dense + BM25 + rerank, pool 20</td><td class="n">0.613</td><td class="n win">0.824</td><td class="n">0.786</td><td class="n">0.760</td><td class="n">235 ms</td></tr>
+          <tr class="best"><td>dense + rerank, fp16, 512 tok</td><td class="n">0.631</td><td class="n">0.815</td><td class="n">0.796</td><td class="n">0.765</td><td class="n">205 ms</td></tr>
+        </tbody>
+        <caption>
+          Best system in the final row: +8.9 points of recall@5 over the frozen
+          baseline, +12% relative, at 193 ms median and 247 ms p90.
+        </caption>
+      </table>
+    </div>
+
+    <h3>Finding 1 · The BM25 hypothesis is refuted<span class="tag neg">refuted</span></h3>
+    <p>Recorded in the config file before measurement:</p>
+    <blockquote>
+      <p>
+        Legal French is full of exact tokens that dense encoders blur — article
+        numbers, "société anonyme", "acte uniforme". BM25 should help precisely
+        where embeddings are weakest.
+      </p>
+    </blockquote>
+    <p>It does not, at any point in the pipeline:</p>
+    <ul>
+      <li><strong>Alone</strong>, it is worse than dense everywhere: 0.637 against 0.735.</li>
+      <li>
+        <strong>Fused with dense</strong>, it is <em>worse than dense alone</em> at
+        recall@5 — 0.716 against 0.735 — and clearly worse at recall@1 and MRR.
+        RRF does surface articles that dense missed, visible as better recall@20,
+        but it displaces dense's precise top hits doing it. At
+        <code>final_k=5</code>, which is what reaches the generator, that trade is
+        a loss.
+      </li>
+      <li>
+        <strong>Under reranking</strong>, it was written up as contributing
+        <em>nothing measurable</em>. That was true on a gold set whose
+        <code>cross_act</code> category was four questions and never moved.
+        Rebuilt to nine, BM25's effect appears — and in exactly one place:
+        <strong>cross_act recall@5 +0.056, and 0.000 on lookup, multi_hop and
+        temporal alike.</strong> Half a question, bought with recall@1, MRR and
+        30 ms; BM25 is still not shipped. But the original claim was stronger
+        than its evidence, and the category was too small to have supported it.
+      </li>
+    </ul>
+    <p>
+      The mechanism behind the hypothesis was real. BM25 genuinely retrieves
+      articles dense retrieval misses, which is why recall@20 improves. It just
+      does not survive the cut to five, and a cross-encoder recovers the same
+      articles without it. The result is safe not because any single comparison is
+      decisive at n&nbsp;=&nbsp;51, but because it is consistent across three
+      independent ones.
+    </p>
+
+    <h3>Finding 2 · A wider candidate pool made reranking worse<span class="tag neg">nearly missed</span></h3>
+    <div class="tw">
+      <table>
+        <thead>
+          <tr><th></th><th class="n">recall@5</th><th class="n">recall@20 (ceiling)</th><th class="n">Latency</th></tr>
+        </thead>
+        <tbody>
+          <tr><td>pool 50</td><td class="n">0.804</td><td class="n">0.931</td><td class="n">1592 ms</td></tr>
+          <tr><td>pool 20</td><td class="n win">0.824</td><td class="n">0.902</td><td class="n win">636 ms</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <p>
+      The wider pool raises the ceiling and the reranker cannot exploit it. Thirty
+      extra candidates offer more opportunities for a distractor to score into the
+      top five than for a true positive to be rescued. Pool 50 is strictly
+      dominated: less accurate at the <em>k</em> that matters, and 2.5× slower.
+    </p>
+    <div class="note">
+      <p class="detector">How close this came to being missed</p>
+      <p>
+        <code>03_hybrid_rerank.yaml</code> had been written in Phase 0 with
+        <code>top_k: 50</code> while every other config used 20, so the first
+        rerank result confounded "add a cross-encoder" with "widen the pool".
+        Configs 04 and 05 exist because that confound was spotted while reading
+        the table, not because it was planned.
+      </p>
+    </div>
+
+    <h3>Finding 3 · Truncation is an accuracy gain, not a speed optimisation</h3>
+    <p>
+      Profiling first, rather than guessing: <strong>reranking was 97.7% of
+      end-to-end latency</strong> — encode 15 ms, search 0.8 ms, rerank 486 ms
+      median and 1,771 ms p90. Two causes, both configuration rather than model
+      choice: the cross-encoder loaded in <strong>fp32</strong> on a GPU built for
+      half precision, and <code>max_length</code> defaulted to <strong>8192</strong>.
+      Attention is quadratic, so one long article dominated whatever batch it
+      landed in — 2,622 tokens → 389 ms against 4,514 tokens → 1,771 ms.
+      <strong>1.7× the tokens, 4.5× the time.</strong>
+    </p>
+    <p>
+      Both were changed at once and the result was faster <em>and</em> more
+      accurate — which is the shape of a confounded result, so it was split into a
+      2×2:
+    </p>
+    <div class="tw">
+      <table>
+        <thead>
+          <tr>
+            <th class="n">max_length</th><th>Precision</th>
+            <th class="n">R@1</th><th class="n">MRR</th><th class="n">nDCG@5</th>
+            <th class="n">Median</th><th class="n">p90</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr><td class="n">8192</td><td>fp32</td><td class="n">0.598</td><td class="n">0.740</td><td class="n">0.744</td><td class="n">538 ms</td><td class="n">1673 ms</td></tr>
+          <tr><td class="n">8192</td><td>fp16</td><td class="n">0.598</td><td class="n">0.740</td><td class="n">0.744</td><td class="n">200 ms</td><td class="n">599 ms</td></tr>
+          <tr><td class="n">512</td><td>fp32</td><td class="n win">0.647</td><td class="n win">0.776</td><td class="n win">0.766</td><td class="n">624 ms</td><td class="n">794 ms</td></tr>
+          <tr class="best"><td class="n">512</td><td>fp16</td><td class="n">0.647</td><td class="n">0.776</td><td class="n">0.766</td><td class="n">193 ms</td><td class="n">247 ms</td></tr>
+        </tbody>
+        <caption>The separation is complete: precision is the speed lever, truncation is the accuracy lever.</caption>
+      </table>
+    </div>
+    <p>
+      <strong>fp16 costs no accuracy at all</strong> — identical to three decimals
+      in both length settings. A 2.7× speedup for nothing. Ranking is an ordering
+      problem, and the score gaps here are far larger than fp16 error.
+    </p>
+    <p>
+      <strong>Truncation is responsible for the entire accuracy gain</strong>:
+      +4.9 points of recall@1 and +3.6 of MRR, in both precisions. This is a
+      finding, not an optimisation. An article's operative statement sits at its
+      opening, and long enumerations — article 13's list of statutory mentions,
+      article 51's six categories of insaisissable goods — dilute the relevance
+      signal across text that does not bear on the question. Capping at 512 tokens
+      acts as a <em>prior about where legal meaning lives</em>.
+    </p>
+    <p>
+      Combined: <strong>2.8× faster median, 6.8× faster p90, and better
+      ranking.</strong> Had the two changes not been separated, this would have
+      been written up as "we made reranking fast and it happened to help", and the
+      more interesting half would have been invisible.
+    </p>
+  </section>
+
+  <section>
+    <div class="mark">§&nbsp;6</div>
+    <h2>Generation, and a fine-tune that failed instructively</h2>
+
+    <h3>The base model already satisfies most of the contract</h3>
+    <p>Qwen3-4B-Instruct-2507 in 4-bit NF4, with the retrieval stack above:</p>
+    <div class="tw">
+      <table>
+        <thead>
+          <tr><th>Metric</th><th class="n">Value</th><th>Reading</th></tr>
+        </thead>
+        <tbody>
+          <tr><td>answers_citing_unretrieved</td><td class="n win">0.000</td><td>nothing invented from parametric memory</td></tr>
+          <tr><td>answers_citing_repealed</td><td class="n win">0.000</td><td>no repealed article presented as law</td></tr>
+          <tr><td>answers_with_no_citation</td><td class="n win">0.000</td><td>every answer cited something</td></tr>
+          <tr><td>correct_abstention</td><td class="n">0.875</td><td>7 of 8 unanswerable questions declined</td></tr>
+          <tr><td>false_abstention</td><td class="n">0.039</td><td>2 of 51 answerable questions wrongly declined</td></tr>
+          <tr><td>citation_recall</td><td class="n">0.765</td><td>of gold articles, how many were cited</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <p>
+      <strong>Citation recall is bounded by retrieval, not by the model.</strong>
+      Retrieval reaches recall@5&nbsp;=&nbsp;0.824; answers reach 0.765. Inspecting
+      the gap shows only <strong>three</strong> cases in 51 where a gold article sat
+      in context and went uncited. Both false abstentions have the same cause:
+      retrieval did not supply the governing article, and the model declined
+      correctly <em>given what it was shown</em>.
+    </p>
+    <div class="note">
+      <p class="detector">A metric that was wrong before the system was</p>
+      <p>
+        <code>citation_precision</code> was penalising <em>correct</em>
+        supplementary citations — an answer that cites the governing article plus a
+        genuinely relevant related one scored worse than a bare answer.
+        <code>citation_recall</code> was introduced as the primary citation metric
+        for that reason.
+      </p>
+    </div>
+    <p>
+      The real defect is length. The median answer is 101 words and latency tracks
+      output length almost linearly: 21 words → 6.0 s, 101 words → 26.5 s, 286
+      words → 66.5 s. At 26 seconds the system is not interactive, and the cause
+      is not retrieval — reranking is 0.7% of end-to-end time.
+    </p>
+
+    <h3>The hypothesis, recorded before training</h3>
+    <blockquote>
+      <p>
+        The adapter will produce <strong>little or no improvement</strong> on the
+        contract metrics, because the base model already satisfies them. It should
+        produce a <strong>large reduction in answer length</strong>, and therefore
+        latency. <strong>The risk is that conciseness costs citation
+        recall</strong>: an adapter trained to answer in one sentence with one
+        citation may stop citing the <em>second</em> relevant article.
+      </p>
+    </blockquote>
+
+    <h3>What happened<span class="tag neg">regression</span></h3>
+    <p>
+      QLoRA r=16 / α=32, 4-bit NF4 with double quantisation, bf16 compute, paged
+      8-bit AdamW, gradient checkpointing, on one 8 GiB GPU. Final loss 0.027,
+      token accuracy 98.4%. Retrieval was byte-identical for all 59 questions, so
+      every difference is the generator.
+    </p>
+    <div class="tw">
+      <table>
+        <thead>
+          <tr><th>Metric</th><th class="n">Base</th><th class="n">Adapter</th></tr>
+        </thead>
+        <tbody>
+          <tr><td>correct_abstention</td><td class="n">0.875</td><td class="n win">1.000</td></tr>
+          <tr><td>false_abstention</td><td class="n">0.039</td><td class="n loss">0.059</td></tr>
+          <tr><td><strong>citation_recall</strong></td><td class="n win">0.765</td><td class="n loss">0.646</td></tr>
+          <tr><td>citation_precision</td><td class="n">0.587</td><td class="n win">0.677</td></tr>
+          <tr><td>fabrication / repealed / uncited</td><td class="n">0.000</td><td class="n">0.000</td></tr>
+          <tr><td>answer length (median)</td><td class="n">101 w</td><td class="n win">33 w</td></tr>
+          <tr><td>latency (median)</td><td class="n">26.5 s</td><td class="n win">15.5 s</td></tr>
+          <tr><td>latency (p90)</td><td class="n">65.9 s</td><td class="n win">22.8 s</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <p>
+      <strong>All three parts of the hypothesis held.</strong> Contract metrics
+      moved by one question. Latency fell 41%. Citation recall fell 11.9 points for
+      the predicted reason: mean citations per answer went from 1.92 to 1.10, so on
+      questions needing two articles the adapter cites one. Nine questions lost a
+      gold citation the base model had made.
+    </p>
+
+    <h3>What no metric caught</h3>
+    <p>
+      Shorter, faster, cites correctly, never fabricates, abstains better — and the
+      answers are worse:
+    </p>
+    <div class="compare">
+      <div class="q">
+        <div class="who">Question</div>
+        <div class="txt">Quelle est la durée maximale de vie d'une société commerciale ?</div>
+      </div>
+      <div>
+        <div class="who">Base</div>
+        <div class="txt">La durée maximale … est de quatre-vingt-dix-neuf (99) ans, conformément à l'article 28 AUSCGIE (2014).</div>
+      </div>
+      <div class="adapter">
+        <div class="who">Adapter</div>
+        <div class="txt">Toute société à une durée qui doit être mentionnée dans ses statuts (article 28 AUSCGIE (2014)).</div>
+      </div>
+    </div>
+    <p>
+      Right article, right citation format, fewer words, <strong>does not answer
+      the question</strong>. Measuring each answer against the opening sentence of
+      the article it cites:
+    </p>
+    <div class="tw">
+      <table>
+        <thead>
+          <tr><th></th><th class="n">Median similarity</th><th class="n">Answers &gt;0.6 similar</th></tr>
+        </thead>
+        <tbody>
+          <tr><td>base</td><td class="n">0.222</td><td class="n">6 / 47</td></tr>
+          <tr><td><strong>adapter</strong></td><td class="n loss">0.896</td><td class="n loss">38 / 47</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <p>
+      The adapter learned to emit <strong>the opening sentence of a retrieved
+      article plus a citation, independent of the question.</strong> On q017 —
+      <em>"Qu'est-ce qu'une hypothèque&nbsp;?"</em> — it produced the definition of
+      <em>sûretés personnelles</em>: the wrong article's opening, perfectly
+      formatted and cleanly cited.
+    </p>
+
+    <h3>Why: the training data taught exactly this</h3>
+    <p>
+      The targets were built as <code>_first_sentence(article.text) + citation</code>.
+      The reasoning was sound in isolation — an article's operative rule sits at
+      its opening, the <em>same observation</em> that made 512-token truncation
+      improve reranking in §5. As a training target it is a different thing
+      entirely: it teaches that the correct response to any question is the opening
+      of an article.
+    </p>
+    <p>
+      The model learned that at 98.4% token accuracy. <strong>It learned the task
+      it was given. The task was wrong.</strong>
+    </p>
+    <p>
+      This is a textbook proxy-optimisation failure, and it is the most useful
+      result in the project:
+    </p>
+    <ol>
+      <li>
+        <strong>Every structural metric improved or held while quality
+        collapsed.</strong> A dashboard would have reported a successful fine-tune
+        with a 41% latency win.
+      </li>
+      <li>
+        <strong>Only reading outputs revealed it</strong> — the same method that
+        found the table-of-contents contamination and the
+        <code>citation_precision</code> flaw.
+      </li>
+      <li>
+        <strong>A low training loss measured obedience, not quality.</strong> 0.027
+        describes how well the model matched templated targets and says nothing
+        about whether those targets were worth matching.
+      </li>
+    </ol>
+    <p>
+      <strong>Decision: the adapter is not shipped.</strong> The base model with
+      RAG remains the system.
+    </p>
+    <p>
+      Two smaller results are worth keeping. <strong>q053 genuinely
+      improved</strong> — the criminal-penalties question, the hardest abstention
+      case in the set, where the corpus defines the offence but leaves the penalty
+      to national law, is now correctly declined. And <strong>q057 regressed, which
+      is what it was reclassified in §4 to catch</strong>: a question fixed because
+      it would have penalised correct behaviour ended up catching the opposite
+      failure.
+    </p>
+
+    <h3>One engineering note worth recording</h3>
+    <div class="note">
+      <p class="detector">A silent failure that would have produced a plausible number</p>
+      <p>
+        TRL's <code>assistant_only_loss</code> <strong>silently masked
+        nothing</strong>. Qwen3's chat template carries no
+        <code>{% generation %}</code> marker, so the mask returned 0 supervised
+        tokens out of 984 — with a warning, not an error. Training would have run
+        to completion, reported a plausible loss, and produced an adapter trained
+        on nothing.
+      </p>
+      <p>
+        The fix was to switch to prompt/completion format with
+        <code>completion_only_loss</code>, and to add
+        <code>_verify_loss_masking()</code>, which inspects a real collated batch
+        before training starts and raises if the supervised fraction is 0%, 100%,
+        or above 50%.
+      </p>
+    </div>
+  </section>
+
+  <section>
+    <div class="mark">§&nbsp;7</div>
+    <h2>The agentic layer: two mechanisms, neither calibrated</h2>
+    <p>
+      An LLM was put in the retrieval loop twice, as separate switches so that
+      "the agent helped" could be decomposed into which part helped:
+      <code>dense → [decompose] → rerank → [verify]</code>. Decomposition splits
+      a question into sub-questions and fuses the rankings with RRF;
+      verification asks whether the passages suffice and searches again with
+      whatever the model says is missing. Both satisfy the same
+      <code>Retriever</code> protocol as every other stage, so the harness
+      scored them with the code that produced §5.
+    </p>
+    <div class="tw">
+      <table>
+        <thead>
+          <tr><th>Metric</th><th class="n">rerank-fast</th><th class="n">+ decompose</th><th class="n">+ verify</th></tr>
+        </thead>
+        <tbody>
+          <tr><td>recall@1</td><td class="n win">0.647</td><td class="n">0.647</td><td class="n loss">0.578</td></tr>
+          <tr><td>recall@5</td><td class="n win">0.824</td><td class="n">0.824</td><td class="n loss">0.814</td></tr>
+          <tr><td>MRR</td><td class="n win">0.776</td><td class="n">0.776</td><td class="n loss">0.717</td></tr>
+          <tr><td>nDCG@5</td><td class="n win">0.766</td><td class="n">0.766</td><td class="n loss">0.722</td></tr>
+          <tr><td>latency median</td><td class="n win">240 ms</td><td class="n">655 ms</td><td class="n loss">1767 ms</td></tr>
+          <tr><td>latency p90</td><td class="n win">312 ms</td><td class="n">804 ms</td><td class="n loss">11049 ms</td></tr>
+        </tbody>
+        <caption>Ship neither. Decomposition matches the baseline to three decimals on every metric and every question kind, at 2.7× the latency.</caption>
+      </table>
+    </div>
+
+    <h3>Decomposition refuses precisely where it would help<span class="tag neg">no-op</span></h3>
+    <p>
+      Identical numbers are equally consistent with "the mechanism does not
+      work" and "the mechanism never ran", so the raw reply was recorded for all
+      59 questions.
+    </p>
+    <div class="tw">
+      <table>
+        <thead>
+          <tr><th>Kind</th><th class="n">Decomposed</th></tr>
+        </thead>
+        <tbody>
+          <tr><td><strong>multi_hop</strong> — the target</td><td class="n loss">1 / 9</td></tr>
+          <tr><td>cross_act</td><td class="n">1 / 4</td></tr>
+          <tr><td>temporal</td><td class="n">1 / 5</td></tr>
+          <tr><td>lookup</td><td class="n">1 / 33</td></tr>
+          <tr><td><strong>unanswerable</strong> — where it is useless</td><td class="n loss">3 / 8</td></tr>
+        </tbody>
+        <caption>47 of 59 replies declared the question atomic.</caption>
+      </table>
+    </div>
+    <blockquote>
+      <p>
+        Combien de personnes faut-il au minimum pour constituer une société
+        coopérative simplifiée, <strong>et</strong> combien pour une société
+        coopérative avec conseil d'administration&nbsp;?
+      </p>
+    </blockquote>
+    <p>
+      Explicit conjunction, two distinct points of law, two articles in the gold
+      set — declared single-article, eight times out of nine. <strong>The one
+      kind it did split is <code>unanswerable</code></strong>, where the corpus
+      holds no answer and sub-questions retrieve nothing useful by construction.
+      Its judgement is not weak, it is inverted.
+    </p>
+
+    <h3>Verification is never satisfied, and that costs<span class="tag neg">harmful</span></h3>
+    <div class="tw">
+      <table>
+        <tbody>
+          <tr><td>Questions where it asked for more</td><td class="n loss">55 / 59</td></tr>
+          <tr><td>Top-5 rankings it changed</td><td class="n">14</td></tr>
+          <tr><td>Questions it <strong>improved</strong></td><td class="n loss">0</td></tr>
+          <tr><td>Questions it damaged</td><td class="n">1</td></tr>
+          <tr><td>Slowest single question</td><td class="n loss">42 s</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <p>
+      The predicted signature appeared exactly. From
+      <code>12_agent_verify.yaml</code>, before the run: <em>a confident
+      follow-up query can displace a true positive out of the top five; RRF
+      fusion limits the damage but does not prevent it, so a drop on lookup
+      would be the signature.</em> Lookup recall@5 held at 0.879 while lookup
+      MRR fell 0.798 → 0.749 — true positives pushed <em>down</em> inside the
+      top five rather than out of it.
+    </p>
+
+    <h3>One reason for both failures</h3>
+    <p>
+      The decomposer is asked <em>does this need several articles?</em> and says
+      no 47 times in 59. The verifier is asked <em>do these passages
+      suffice?</em> and says no 55 times in 59. Neither is calibrated; one
+      almost never acts, the other almost always does, and only the acting one
+      moves the metrics — downward.
+    </p>
+    <p>
+      §6 already recorded the limit underneath this. Both false abstentions in
+      the generation baseline were questions where retrieval had not supplied
+      the governing article and the model declined correctly: <strong>it knew
+      the context was insufficient.</strong> What it could not do is name the
+      article that would fix it, never having seen it. Verification asks for
+      exactly that, so it returns a plausible legal phrase — and a plausible
+      phrase retrieved and fused is a distractor.
+    </p>
+
+    <div class="note">
+      <p class="detector">A null result that rested on luck</p>
+      <p>
+        The decomposer never once emitted the token it was asked for. Told in
+        French to reply <code>ATOMIQUE</code>, it produced <code>ATOMIC</code>,
+        <code>ATOMICITY</code> twice, a sentence of commentary with
+        <code>ATOMIQUE</code> at the end, and once simply <code>Non</code>.
+      </p>
+      <p>
+        All five reached the right outcome, through three <em>different</em>
+        accidents: two were shorter than the minimum sub-question length, one
+        survived as a single line and was killed by the rule that one part is
+        not a decomposition, and one was prose. <strong>None was caught by the
+        check written to catch them.</strong> Two lines of commentary instead of
+        one, and the model's commentary about the question would have been
+        issued as sub-questions.
+      </p>
+      <p>
+        The check now matches on the stem, per line, for single-word replies,
+        with all five real strings pinned as tests. Re-running reproduced every
+        number to three decimals — so the null result stands, but it stood on
+        luck first, and a null result resting on luck is not a null result.
+      </p>
+    </div>
+  </section>
+
+  <section>
+    <div class="mark">§&nbsp;8</div>
+    <h2>Serving, and another negative result</h2>
+    <p>
+      The system is served by FastAPI with server-sent events, a streaming UI,
+      and a Docker image. The service loads one <code>ExperimentConfig</code> and
+      builds the pipeline with the same <code>build_retriever</code> the
+      evaluation harness calls — there is no serving-only prompt or retrieval
+      setting, because a served system that could drift from the measured one
+      would make the ablation table describe nothing a user touches.
+      <code>/health</code> reports the run id and index fingerprint rather than
+      merely "ok", so the chain from output back to system survives the last
+      step.
+    </p>
+    <p>
+      Generation is serialised behind a lock. One GPU holds one generator, and
+      two concurrent 4-bit generations on 8 GiB contend for memory that is not
+      there — the failure mode is an OOM that takes the process down, not a slow
+      response.
+    </p>
+    <div class="tw">
+      <table>
+        <thead>
+          <tr>
+            <th class="n">Clients</th><th class="n">First token</th>
+            <th class="n">Total median</th><th class="n">Total p90</th>
+            <th class="n">Answers/min</th><th class="n">Wall</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr><td class="n">1</td><td class="n win">1.1 s</td><td class="n">20.1 s</td><td class="n">37.9 s</td><td class="n">2.68</td><td class="n">179 s</td></tr>
+          <tr><td class="n">2</td><td class="n">13.2 s</td><td class="n">39.5 s</td><td class="n">68.1 s</td><td class="n">2.83</td><td class="n">170 s</td></tr>
+          <tr><td class="n">4</td><td class="n loss">40.8 s</td><td class="n">69.5 s</td><td class="n">86.8 s</td><td class="n">2.83</td><td class="n">169 s</td></tr>
+        </tbody>
+        <caption>8 requests per wave. Identical work, identical wall clock, however many clients ask at once.</caption>
+      </table>
+    </div>
+
+    <h3>The queuing prediction held</h3>
+    <p>
+      Recorded in <code>bench.py</code> before the run: throughput stays flat
+      while latency rises roughly linearly with concurrency. Throughput is flat
+      to within 6%; latency rises 2.0× and 3.5× for 2× and 4× concurrency; and
+      the wall clock for the same eight answers is 179 s, 170 s, 169 s. Nothing
+      worse than queuing occurs — no OOM, no thrash, no superlinear collapse. The
+      lock converts a hardware limit into a predictable wait, which was the
+      entire justification for it.
+    </p>
+
+    <h3>The streaming headline is a single-user number<span class="tag neg">holds only at c=1</span></h3>
+    <div class="tw">
+      <table>
+        <thead>
+          <tr><th>Clients</th><th class="n">1</th><th class="n">2</th><th class="n">4</th></tr>
+        </thead>
+        <tbody>
+          <tr><td>Perceived speedup</td><td class="n win">18.9×</td><td class="n">3.0×</td><td class="n loss">1.7×</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <p>
+      At one client the first token arrives <strong>18.9× sooner</strong> than
+      the complete answer. At four it is <strong>1.7×</strong>, because under
+      load time-to-first-token stops being prefill and becomes
+      <em>waiting for the lock</em>.
+    </p>
+    <div class="note">
+      <p class="detector">Why all three rows are reported</p>
+      <p>
+        Quoting 18.9× alone would be a real measurement taken under the one
+        condition that flatters it — the serving equivalent of the §6 mistake.
+        The benchmark prints every concurrency level for that reason.
+      </p>
+    </div>
+    <p>
+      Two supporting results. <code>/search</code> throughput nearly doubles from
+      c=1 to c=2 (1.8 → 3.0 req/s) where generation's does not move at all — that
+      contrast is the control that makes flat generation throughput attributable
+      to the lock rather than to a saturated GPU. And retrieval measures
+      <strong>200 ms</strong> over HTTP against the <strong>193 ms</strong> §5
+      recorded in-process, so the ablation table's latencies survive contact with
+      a network client.
+    </p>
+  </section>
+
+  <section>
+    <div class="mark">§&nbsp;9</div>
+    <h2>What this project demonstrates</h2>
+    <p>Stated as claims, each with the evidence behind it.</p>
+    <p>
+      <strong>A reproducible experimental harness.</strong> Content-hashed configs,
+      a frozen baseline, pre-registered hypotheses, and 12 runs each traceable to
+      the exact system that produced it.
+    </p>
+    <p>
+      <strong>That the interesting results here are negative.</strong> BM25 refuted
+      three ways, a wider pool that hurt, a fine-tune that regressed, a streaming
+      speedup that held only for one user. All four were plausible enough to have
+      been shipped on intuition.
+    </p>
+    <p>
+      <strong>That the system is served, and served as the thing that was
+      measured.</strong> FastAPI with SSE, a streaming UI, a Docker image, and an
+      API whose response carries the same contract the harness scores — including
+      a per-response fabrication check. <code>/health</code> reports the run id,
+      so an output can still be traced to the system that produced it after it
+      leaves the harness.
+    </p>
+    <p>
+      <strong>That measurement infrastructure has to be doubted too.</strong> Two
+      metrics were wrong before the systems they scored were:
+      <code>citation_precision</code> penalised correct behaviour, and the gold set
+      contained articles that were never needed. Both were found and both changed
+      the reported numbers.
+    </p>
+    <p>
+      <strong>That silent failures are the dangerous ones.</strong> The loss mask
+      that masked nothing, the parse defect that both self-checks passed, the
+      adapter that improved every metric while getting worse. None of these throw.
+    </p>
+    <p>
+      <strong>Domain reasoning, not just pipeline assembly.</strong> Article-level
+      repealed status because legal status is not a document property;
+      <code>[TEXTE ABROGÉ]</code> pushed into indexed text so the warning reaches
+      the context window; elision handling and compound article numbers in French
+      tokenization; 512-token truncation as a prior about where legal meaning
+      lives.
+    </p>
+  </section>
+
+  <section>
+    <div class="mark">§&nbsp;10</div>
+    <h2>Limits</h2>
+    <p>
+      Stated because a results table that names its own limits is worth more than
+      one that does not.
+    </p>
+    <ul>
+      <li>
+        <strong>n = 51 answerable questions.</strong> Differences of one or two
+        points are noise. The BM25 result holds on consistency across three
+        comparisons, not on any single one.
+      </li>
+      <li>
+        <strong>n = 8 for abstention.</strong> <code>correct_abstention</code>
+        moves in steps of 0.125. No fine-grained claim about abstention is
+        supportable at this size.
+      </li>
+      <li>
+        <strong><code>cross_act</code> is four questions and never moved</strong>
+        across any of the seven systems — 0.375 in six of them. That is a count,
+        not a measurement.
+      </li>
+      <li>
+        <strong><code>answers_citing_repealed</code> is near-vacuous.</strong> The
+        corpus holds three repealed articles and none of the seven superseded acts,
+        so 0.000 means "the situation rarely arose", not "the system is safe".
+      </li>
+      <li>
+        <strong>No judgement of answer correctness.</strong> Every metric here is
+        structural — citations, abstention, length. Whether the French prose states
+        the law accurately is unmeasured, and would need an LLM judge or a lawyer.
+      </li>
+      <li>
+        <strong>One embedding model.</strong> Whether
+        <code>multilingual-e5-base</code> suits French legal text is untested; only
+        its combination with a reranker has been measured.
+      </li>
+      <li>
+        <strong>One corpus, one language.</strong> Nothing here establishes that
+        these results transfer to another legal system or another language.
+      </li>
+      <li>
+        <strong>SYCEBNL-2022 is a scan</strong> and was refused rather than parsed.
+        Seven repealed acts remain unsourced.
+      </li>
+    </ul>
+  </section>
+
+  <section>
+    <div class="mark">§&nbsp;11</div>
+    <h2>What would come next</h2>
+    <p>
+      <strong>Fix <code>cross_act</code> properly.</strong> Rebuild it from real
+      inter-act textual cross-references, which is the only way to make the weakest
+      row in the table measurable.
+    </p>
+    <p>
+      <strong>Source the repealed acts</strong>, so
+      <code>answers_citing_repealed</code> becomes a real test rather than a
+      wired-up metric that never fires.
+    </p>
+    <p>
+      <strong>Measure whether the law is stated correctly.</strong> The largest gap
+      in the evaluation. Needs an LLM judge, validated against human review on a
+      subset.
+    </p>
+    <p>
+      <strong>Fine-tuning, done properly.</strong> The adapter is not evidence that
+      fine-tuning cannot help here; it is evidence that <em>these targets</em> do
+      not. A serious attempt needs answer targets that are genuine answers rather
+      than article summaries — which means human writing or a stronger teacher,
+      since the only local model is the one being trained. That is a real cost, and
+      worth stating rather than substituting a cheaper proxy and reporting the
+      latency win.
+    </p>
+  </section>
+
+  <footer>
+    Every number reproduces from a config file ·
+    <code>kora eval run -c configs/experiments/07_rerank_fast.yaml</code><br>
+    Serve the same system · <code>kora serve start -c configs/experiments/07_rerank_fast.yaml</code><br>
+    Corpus: Actes uniformes OHADA, not redistributed · MIT for the code
+  </footer>
+
+</div>
+
+</body>
+</html>
