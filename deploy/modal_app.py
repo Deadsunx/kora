@@ -83,8 +83,13 @@ image = (
     )
     .env(
         {
+            # HF_HOME is on the volume, so both the model weights and the
+            # corpus snapshot persist across cold starts.
             "HF_HOME": "/cache/huggingface",
-            "KORA_DATA_DIR": "/cache/data",
+            # KORA_DATA_DIR is deliberately NOT set: `ensure_data()` treats it
+            # as "the corpus is already here" and skips the download. Leaving it
+            # unset lets that function fetch the private dataset and point
+            # KORA_DATA_DIR at the snapshot itself.
             "KORA_DATASET_REPO": "Deadsunx/kora-corpus",
             "KORA_CONFIG": "/opt/kora/configs/experiments/07_rerank_fast.yaml",
             # Load the models when the container starts rather than inside the
@@ -130,34 +135,31 @@ image = (
 # Engine, which is what the Phase 6 benchmark measured. This number only has to
 # be large enough for the transport.
 @modal.concurrent(max_inputs=20)
-@modal.asgi_app()
+# `web_server` rather than `asgi_app`, and the reason is specific.
+#
+# Gradio's queue runs two long-lived asyncio tasks, start_processing and
+# start_progress_updates, spawned when its app starts. Mounting the Blocks into
+# a FastAPI app under @modal.asgi_app() does not keep an event loop alive
+# between requests, so both tasks were destroyed the moment they were created --
+# the logs read "Task was destroyed but it is pending!" on a loop -- and no
+# submitted job was ever processed.
+#
+# Letting Gradio run its own uvicorn keeps its lifespan, and therefore its
+# queue, intact. Modal proxies to the port.
+@modal.web_server(port=8000, startup_timeout=900)
 def ui():
-    """Gradio over ASGI."""
-    import os
-    import shutil
-    from pathlib import Path
+    """Start Gradio's own server; Modal proxies to it."""
+    from kora.serving.demo import build_demo, engine
 
-    from fastapi import FastAPI
-    from gradio.routes import mount_gradio_app
-    from huggingface_hub import snapshot_download
-
-    from kora.serving.demo import build_demo
-
-    # Corpus first, before anything tries to load an index.
-    data_dir = Path(os.environ["KORA_DATA_DIR"])
-    if not data_dir.exists():
-        downloaded = snapshot_download(
-            repo_id=os.environ["KORA_DATASET_REPO"],
-            repo_type="dataset",
-            token=os.environ["HF_TOKEN"],
-        )
-        shutil.copytree(downloaded, data_dir)
-    cache.commit()
-
-    # Build the pipeline before handing the app to Modal, so the container is
-    # only marked ready once it can actually answer.
-    from kora.serving.demo import engine
-
+    # Load before the port opens. Modal waits for the port during
+    # startup_timeout, so the container is only routed traffic once it can
+    # answer, and nobody's first question pays for a four-gigabyte download.
     engine()
 
-    return mount_gradio_app(app=FastAPI(), blocks=build_demo().queue(max_size=8), path="/")
+    build_demo().queue(max_size=8).launch(
+        server_name="0.0.0.0",
+        server_port=8000,
+        # Return control so Modal sees the port open instead of blocking here.
+        prevent_thread_lock=True,
+        show_api=False,
+    )
