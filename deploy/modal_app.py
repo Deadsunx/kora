@@ -26,7 +26,29 @@ uniformes are not redistributed.
 
 from __future__ import annotations
 
+import subprocess
+
 import modal
+
+
+def deployed_commit() -> str:
+    """The commit this deploy pins the image to.
+
+    Read from the local checkout at deploy time. Two reasons, and the second is
+    the one that bites: pinning states exactly which version of the project is
+    serving, the same discipline the run fingerprints follow; and it busts
+    Modal's layer cache, which otherwise keeps a stale `git clone` forever and
+    silently deploys old code after a push.
+    """
+    return subprocess.run(
+        ["git", "rev-parse", "HEAD"],
+        capture_output=True,
+        text=True,
+        check=True,
+    ).stdout.strip()
+
+
+COMMIT = deployed_commit()
 
 app = modal.App("kora")
 
@@ -55,7 +77,8 @@ image = (
     # the clone also makes `paths.PROJECT_ROOT` resolve to /opt/kora, so config
     # and data paths work exactly as they do locally.
     .run_commands(
-        "git clone --depth 1 https://github.com/Deadsunx/kora.git /opt/kora",
+        "git clone https://github.com/Deadsunx/kora.git /opt/kora",
+        f"cd /opt/kora && git checkout {COMMIT}",
         "pip install -e /opt/kora",
     )
     .env(
@@ -69,6 +92,7 @@ image = (
             # so the cost lands on the cold start where it belongs instead of
             # timing out somebody's first question.
             "KORA_PRELOAD": "1",
+            "KORA_COMMIT": COMMIT,
         }
     )
 )
@@ -85,10 +109,16 @@ image = (
     timeout=900,
     min_containers=0,
 )
-# One GPU generates one answer at a time, exactly as the Phase 6 benchmark
-# measured. Extra concurrency here would not add throughput, it would only let
-# more callers queue inside a single container.
-@modal.concurrent(max_inputs=2)
+# Counts concurrent *connections*, not GPU work, and Gradio holds several
+# long-lived ones per browser tab: the queue SSE stream and a heartbeat, before
+# any question is asked. Setting this to 2 deadlocked the app -- one tab
+# consumed both slots and the request that would have produced an answer had
+# nowhere to run.
+#
+# Serialising the GPU is already handled a layer down, by the generation lock in
+# Engine, which is what the Phase 6 benchmark measured. This number only has to
+# be large enough for the transport.
+@modal.concurrent(max_inputs=20)
 @modal.asgi_app()
 def ui():
     """Gradio over ASGI."""
