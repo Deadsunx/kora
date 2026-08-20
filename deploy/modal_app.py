@@ -108,6 +108,17 @@ image = (
     scaledown_window=300,
     timeout=900,
     min_containers=0,
+    # Gradio keeps its queue in process memory, so a session that starts on one
+    # container cannot be served by another: the browser POSTs to
+    # /gradio_api/queue/join, then opens /gradio_api/queue/data, and a second
+    # container answers the stream with 404 because it has never seen that
+    # session. That was the real cause of the demo hanging, and no amount of
+    # preloading or concurrency tuning could touch it.
+    #
+    # One container costs nothing here. The GPU serialises generation anyway,
+    # and Phase 6 measured throughput as flat at 2.8 answers/min regardless of
+    # how many callers arrive.
+    max_containers=1,
 )
 # Counts concurrent *connections*, not GPU work, and Gradio holds several
 # long-lived ones per browser tab: the queue SSE stream and a heartbeat, before
