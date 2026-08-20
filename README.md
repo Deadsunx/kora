@@ -5,8 +5,9 @@
 > Status: **all eight phases complete.** Every number below links to the
 > write-up that produced it.
 
-**→ [Technical report](docs/report.md)** — the whole project in one document,
-organised around how each finding was found.
+**→ [Read the technical report](https://deadsunx.github.io/kora/)** — the whole
+project in one document, organised around how each finding was found.
+([markdown version](docs/report.md))
 
 ---
 
@@ -150,10 +151,12 @@ rather than prefill. Throughput is flat by design and the wall clock proves it:
    appeared there and only there: **+0.056 recall@5 on cross-act questions, and
    0.000 on every other kind.** Still half a question, still not shipped, but the
    original claim was stronger than the evidence.
-2. **A wider candidate pool made reranking worse.** Pool 50 against pool 20:
-   lower recall@5 and 2.5× slower. More candidates gave distractors more chances
-   to score into the top five than true positives had to be rescued.
-3. **Truncating passages to 512 tokens improved accuracy** (+4.9 recall@1), and
+2. **A wider candidate pool made reranking worse at the k that matters.** Pool
+   50 against pool 20: lower recall@5 and 2× slower. More candidates gave
+   distractors more chances to score into the top five than true positives had
+   to be rescued. It does win on recall@1 and MRR, so "dominated" would
+   overstate it.
+3. **Truncating passages to 512 tokens improved accuracy** (+4.5 recall@1), and
    was nearly written up as a speed optimisation. Separating it from the fp16
    change into a 2×2 showed fp16 = pure speed, truncation = the entire accuracy
    gain. An article's operative rule sits at its opening; long enumerations
